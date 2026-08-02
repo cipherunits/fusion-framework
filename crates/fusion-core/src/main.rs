@@ -1,12 +1,12 @@
-use fusion_core::{App, Response};
+use fusion_core::{App, Request, Response};
 
 #[tokio::main]
 async fn main() {
     let mut app = App::new();
-    app.route("GET", "/", |_req| Response::text(200, "ok"));
-    app.route("GET", "/api/[name]/{id}", |req| {
-        let name = req.params.get("name").map(String::as_str).unwrap_or("-");
-        let id = req.params.get("id").map(String::as_str).unwrap_or("-");
+    app.route("GET", "/", |_req: Request| Response::text(200, "ok"));
+    app.route("GET", "/api/[name]/{id}", |req: Request| {
+        let name = req.params.get("name").map(|s| s.as_str()).unwrap_or("-");
+        let id = req.params.get("id").map(|s| s.as_str()).unwrap_or("-");
         Response::text(200, format!("hello {name}/{id}"))
     });
 

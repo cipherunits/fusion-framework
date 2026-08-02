@@ -40,14 +40,14 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release -m crates/fusion-py/Cargo.toml --out dist --interpreter python
+          args: --release -m crates/fusion-py/Cargo.toml --out dist
           sccache: "true"
-          manylinux: auto
+          manylinux: "2_28"
       - name: Install and smoke import
         shell: bash
         run: |
           pip install dist/*.whl
-          python -c "from fusion_framework.api import FusionBaseApi; from fusion_framework.route import router; print('ok')"
+          python -c "from fusion_framework.api import FusionBaseApi; from fusion_framework.route import router; from fusion_framework import settings; print('ok')"
 
   node:
     name: Node addon (${{ matrix.settings.target }})

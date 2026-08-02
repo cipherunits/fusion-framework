@@ -9,6 +9,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 fusion-core = { workspace = true }
-pyo3 = { workspace = true }
+pyo3 = { version = "0.25", features = ["extension-module", "abi3-py39"] }
 tokio = { workspace = true }
 bytes = { workspace = true }
