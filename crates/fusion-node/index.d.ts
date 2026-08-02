@@ -4,6 +4,18 @@ export class App {
   listen(host: string, port: number): Promise<void>
 }
 
+export class Settings {
+  constructor()
+  loadJson(path?: string | null, env?: string | null, extraRoots?: string[]): void
+  ensureLoaded(extraRoots?: string[]): void
+  merge(values: Record<string, unknown>): void
+  get(key: string, defaultValue?: unknown): unknown
+  readonly host: string
+  readonly port: number
+  readonly debug: boolean
+  readonly env: string
+}
+
 export class FusionBaseApi {
   request: FusionRequest
   constructor(request: FusionRequest)
@@ -12,7 +24,7 @@ export class FusionBaseApi {
   readonly body: string
   readonly headers: Record<string, string>
   readonly params: Record<string, string>
-  ok(body?: string, status?: number, headers?: Record<string, string>): FusionResponse
+  ok(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
   json(data: unknown, status?: number): FusionResponse
 }
 
@@ -25,14 +37,22 @@ export class FusionApp {
 export function router(path: string): <T>(ApiClass: T) => T
 export function apiResourceName(cls: { name: string } | string): string
 export function resolveRoutePath(path: string, cls: { name: string }): string
-export function configure(settings: Partial<FusionSettings>): FusionSettings
+export function configure(settings: Record<string, unknown>): FusionSettings
 export function getSettings(): FusionSettings
 export function run(settingsModulePath?: string): Promise<void>
+export function getHttpMethods(): string[]
+export function apiResourceNameJs(className: string): string
+export function resolveRoutePathJs(template: string, className: string): string
+export function coerceParamJs(raw: string, kind?: string): unknown
+
+export const settings: Settings
+export const HTTP_METHODS: string[]
 
 export interface FusionSettings {
   host: string
   port: number
   debug: boolean
+  env?: string
 }
 
 export interface FusionRequest {
@@ -47,6 +67,6 @@ export type FusionResponse =
   | string
   | {
       status?: number
-      body?: string
+      body?: unknown
       headers?: Record<string, string>
     }

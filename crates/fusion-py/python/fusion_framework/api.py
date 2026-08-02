@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from fusion_framework._fusion import HTTP_METHODS
+
 
 class FusionBaseApi:
-    """Base class for class-based HTTP endpoints.
+    """Host-language request view. Serialization rules live in fusion-core."""
 
-    Subclasses define sync or async handlers named ``get``, ``post``,
-    ``put``, ``patch``, ``delete``. Path params from ``@router`` are passed
-    as method arguments; the current request is available as ``self.request``.
-    """
-
-    HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
+    HTTP_METHODS = HTTP_METHODS
 
     def __init__(self, request: Mapping[str, Any]):
         self.request = request
@@ -43,10 +40,8 @@ class FusionBaseApi:
         return response
 
     def json(self, data: Any, status: int = 200) -> dict[str, Any]:
-        import json
-
         return {
             "status": status,
-            "body": json.dumps(data),
+            "body": data,
             "headers": {"content-type": "application/json"},
         }

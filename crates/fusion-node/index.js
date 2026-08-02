@@ -36,15 +36,11 @@ function loadNative() {
 
 const native = loadNative()
 const NativeApp = native.App
+const NativeSettings = native.Settings
 
-const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
+const HTTP_METHODS = native.getHttpMethods()
+const settings = new NativeSettings()
 const registry = []
-
-let settings = {
-  host: '127.0.0.1',
-  port: 3000,
-  debug: false,
-}
 
 class FusionBaseApi {
   constructor(request) {
@@ -78,7 +74,7 @@ class FusionBaseApi {
   json(data, status = 200) {
     return {
       status,
-      body: JSON.stringify(data),
+      body: data,
       headers: { 'content-type': 'application/json' },
     }
   }
@@ -86,14 +82,11 @@ class FusionBaseApi {
 
 function apiResourceName(cls) {
   const name = typeof cls === 'string' ? cls : cls.name
-  if (name.endsWith('Api') && name.length > 3) return name.slice(0, -3)
-  if (name.endsWith('API') && name.length > 3) return name.slice(0, -3)
-  return name
+  return native.apiResourceNameJs(name)
 }
 
 function resolveRoutePath(routePath, ApiClass) {
-  // [name] → class name without trailing "Api" (MyFirstApi → MyFirst)
-  return routePath.replaceAll('[name]', apiResourceName(ApiClass))
+  return native.resolveRoutePathJs(routePath, ApiClass.name)
 }
 
 function router(routePath) {
@@ -107,12 +100,18 @@ function router(routePath) {
 }
 
 function configure(next = {}) {
-  settings = { ...settings, ...next }
-  return settings
+  settings.merge(next)
+  return getSettings()
 }
 
 function getSettings() {
-  return { ...settings }
+  settings.ensureLoaded()
+  return {
+    host: settings.host,
+    port: settings.port,
+    debug: settings.debug,
+    env: settings.env,
+  }
 }
 
 function definesMethod(ApiClass, methodName) {
@@ -139,13 +138,6 @@ function extractParamNames(fn) {
     .filter((name) => name && name !== 'request')
 }
 
-function coerce(value) {
-  if (/^-?\d+$/.test(value)) return Number(value)
-  if (value === 'true') return true
-  if (value === 'false') return false
-  return value
-}
-
 function invokeApiMethod(ApiClass, methodName, request) {
   const instance = new ApiClass(request)
   const fn = instance[methodName]
@@ -154,7 +146,7 @@ function invokeApiMethod(ApiClass, methodName, request) {
     if (!(name in params)) {
       throw new Error(`missing path param '${name}'`)
     }
-    return coerce(params[name])
+    return native.coerceParamJs(String(params[name]), 'auto')
   })
   const result = fn.apply(instance, args)
   if (result != null && typeof result.then === 'function') {
@@ -167,7 +159,8 @@ function invokeApiMethod(ApiClass, methodName, request) {
 
 class FusionApp {
   constructor(customSettings) {
-    this.settings = { ...settings, ...(customSettings || {}) }
+    if (customSettings) settings.merge(customSettings)
+    this.settings = getSettings()
     this.engine = new NativeApp()
     this.mounted = false
   }
@@ -189,9 +182,10 @@ class FusionApp {
 
   async listen(host, port) {
     this.mount()
-    const h = host ?? this.settings.host
-    const p = port ?? this.settings.port
-    if (this.settings.debug) {
+    const snapshot = getSettings()
+    const h = host ?? snapshot.host
+    const p = port ?? snapshot.port
+    if (snapshot.debug) {
       console.log(`fusion listening on http://${h}:${p}`)
     }
     await this.engine.listen(h, Number(p))
@@ -199,13 +193,14 @@ class FusionApp {
 }
 
 async function run(settingsModulePath) {
+  settings.loadJson(null, null, [process.cwd()])
   if (settingsModulePath) {
     const mod = await import(pathToFileUrl(settingsModulePath))
-    configure({
-      host: mod.HOST ?? settings.host,
-      port: mod.PORT ?? settings.port,
-      debug: mod.DEBUG ?? settings.debug,
-    })
+    const overlay = {}
+    if (mod.HOST !== undefined) overlay.host = mod.HOST
+    if (mod.PORT !== undefined) overlay.port = mod.PORT
+    if (mod.DEBUG !== undefined) overlay.debug = mod.DEBUG
+    if (Object.keys(overlay).length) settings.merge(overlay)
   }
   const app = new FusionApp()
   await app.listen()
@@ -213,12 +208,12 @@ async function run(settingsModulePath) {
 
 function pathToFileUrl(filePath) {
   const resolved = path.resolve(filePath)
-  const url = require('url').pathToFileURL(resolved).href
-  return url
+  return require('url').pathToFileURL(resolved).href
 }
 
 module.exports = {
   App: NativeApp,
+  Settings: NativeSettings,
   FusionApp,
   FusionBaseApi,
   router,
@@ -226,5 +221,7 @@ module.exports = {
   resolveRoutePath,
   configure,
   getSettings,
+  settings,
+  HTTP_METHODS,
   run,
 }

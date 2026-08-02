@@ -12,3 +12,5 @@ fusion-core = { workspace = true }
 pyo3 = { version = "0.25", features = ["extension-module", "abi3-py39"] }
 tokio = { workspace = true }
 bytes = { workspace = true }
+serde_json = { workspace = true }
+signal-hook = "0.3"

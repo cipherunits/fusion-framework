@@ -4,36 +4,28 @@ import asyncio
 import inspect
 from typing import Any, Callable, Type
 
+from fusion_framework._fusion import (
+    HTTP_METHODS,
+    api_resource_name as _api_resource_name,
+    coerce_param as _coerce_param,
+    resolve_route_path as _resolve_route_path,
+)
 from fusion_framework.api import FusionBaseApi
 
 _REGISTRY: list[tuple[str, Type[FusionBaseApi]]] = []
 
-# Reserved placeholder: replaced with the class name without a trailing "Api".
-_CLASS_NAME_TOKEN = "[name]"
-
 
 def api_resource_name(cls: Type[Any] | str) -> str:
-    """``MyFirstApi`` → ``MyFirst``; leaves names without an ``Api`` suffix unchanged."""
     name = cls if isinstance(cls, str) else cls.__name__
-    if name.endswith("Api") and len(name) > 3:
-        return name[: -len("Api")]
-    if name.endswith("API") and len(name) > 3:
-        return name[: -len("API")]
-    return name
+    return _api_resource_name(name)
 
 
 def resolve_route_path(path: str, cls: Type[Any]) -> str:
-    """Expand ``[name]`` in a route template using the API class name."""
-    return path.replace(_CLASS_NAME_TOKEN, api_resource_name(cls))
+    return _resolve_route_path(path, cls.__name__)
 
 
 def router(path: str) -> Callable[[Type[FusionBaseApi]], Type[FusionBaseApi]]:
-    """Register a ``FusionBaseApi`` subclass on ``path``.
-
-    ``[name]`` is replaced with the class name without the ``Api`` suffix
-    (e.g. ``MyFirstApi`` + ``/api/[name]/{id}`` → ``/api/MyFirst/{id}``).
-    Other ``{param}`` / ``[param]`` segments remain path parameters.
-    """
+    """Register a ``FusionBaseApi`` subclass. Path resolution is done in Rust."""
 
     def decorator(cls: Type[FusionBaseApi]) -> Type[FusionBaseApi]:
         if not issubclass(cls, FusionBaseApi):
@@ -55,19 +47,17 @@ def clear_registry() -> None:
     _REGISTRY.clear()
 
 
-def _coerce(value: str, annotation: Any) -> Any:
+def _annotation_kind(annotation: Any) -> str:
     if annotation is inspect.Parameter.empty or annotation is str or annotation is Any:
-        return value
+        return "str"
     if annotation is int:
-        return int(value)
+        return "int"
     if annotation is float:
-        return float(value)
+        return "float"
     if annotation is bool:
-        return value.lower() in {"1", "true", "yes", "on"}
-    try:
-        return annotation(value)
-    except Exception:
-        return value
+        return "bool"
+    name = getattr(annotation, "__name__", None)
+    return name.lower() if isinstance(name, str) else "str"
 
 
 def _bind_kwargs(method: Callable[..., Any], params: dict[str, str]) -> dict[str, Any]:
@@ -80,7 +70,8 @@ def _bind_kwargs(method: Callable[..., Any], params: dict[str, str]) -> dict[str
             if parameter.default is inspect.Parameter.empty:
                 raise TypeError(f"missing path param '{name}' for {method.__qualname__}")
             continue
-        kwargs[name] = _coerce(params[name], parameter.annotation)
+        kind = _annotation_kind(parameter.annotation)
+        kwargs[name] = _coerce_param(params[name], kind)
     return kwargs
 
 
@@ -92,3 +83,15 @@ def invoke_api_method(api_cls: Type[FusionBaseApi], method_name: str, request: d
     if inspect.isawaitable(result):
         result = asyncio.run(result)
     return result
+
+
+# Re-export for callers that used the constant from this module historically.
+__all__ = [
+    "HTTP_METHODS",
+    "api_resource_name",
+    "resolve_route_path",
+    "router",
+    "registered_routes",
+    "clear_registry",
+    "invoke_api_method",
+]

@@ -1,15 +1,23 @@
+mod coerce;
 mod error;
 mod handler;
+mod naming;
 mod request;
 mod response;
 mod router;
+mod serialize;
 mod server;
+mod settings;
 
+pub use coerce::{ParamKind, coerce_param, param_kind_from_name};
 pub use error::{Error, Result};
 pub use handler::Handler;
+pub use naming::{HTTP_METHODS, api_resource_name, resolve_route_path};
 pub use request::Request;
 pub use response::Response;
 pub use router::Router;
+pub use serialize::{is_response_envelope, response_from_value};
+pub use settings::Settings;
 
 use std::net::SocketAddr;
 
@@ -17,13 +25,30 @@ use std::net::SocketAddr;
 #[derive(Clone, Default)]
 pub struct App {
     router: Router,
+    settings: Settings,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
             router: Router::new(),
+            settings: Settings::new(),
         }
+    }
+
+    pub fn with_settings(settings: Settings) -> Self {
+        Self {
+            router: Router::new(),
+            settings,
+        }
+    }
+
+    pub fn settings(&self) -> &Settings {
+        &self.settings
+    }
+
+    pub fn settings_mut(&mut self) -> &mut Settings {
+        &mut self.settings
     }
 
     pub fn route(&mut self, method: &str, path: &str, handler: impl Handler + 'static) {
@@ -45,5 +70,12 @@ impl App {
     pub async fn listen_host_port(self, host: &str, port: u16) -> Result<()> {
         let addr = server::parse_addr(host, port)?;
         self.listen(addr).await
+    }
+
+    /// Listen using host/port from loaded settings.
+    pub async fn listen_from_settings(self) -> Result<()> {
+        let host = self.settings.host();
+        let port = self.settings.port();
+        self.listen_host_port(&host, port).await
     }
 }
