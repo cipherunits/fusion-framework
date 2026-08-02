@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/fusion-core",
+    "crates/fusion-py",
+    "crates/fusion-node",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+fusion-core = { path = "crates/fusion-core" }
+hyper = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+http-body-util = "0.1"
+hyper-util = { version = "0.1", features = ["full"] }
+bytes = "1"
+http = "1"
+pyo3 = { version = "0.25", features = ["extension-module"] }
+napi = { version = "2", default-features = false, features = ["napi4", "tokio_rt", "async"] }
+napi-derive = "2"

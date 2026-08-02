@@ -1,0 +1,127 @@
+name: Publish npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Trusted Publishing via OIDC — no NPM_TOKEN secret needed.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build native (${{ matrix.settings.host }} / ${{ matrix.settings.target }})
+    runs-on: ${{ matrix.settings.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            build: npx napi build --platform --release --target x86_64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            build: npx napi build --platform --release --target aarch64-unknown-linux-gnu --use-napi-cross
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            build: npx napi build --platform --release --target x86_64-pc-windows-msvc
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            build: npx napi build --platform --release --target aarch64-apple-darwin
+          - host: macos-13
+            target: x86_64-apple-darwin
+            build: npx napi build --platform --release --target x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - name: Install npm deps
+        working-directory: crates/fusion-node
+        run: npm install
+
+      - name: Build native addon
+        working-directory: crates/fusion-node
+        run: ${{ matrix.settings.build }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: |
+            crates/fusion-node/*.node
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm (Trusted Publishing)
+    needs: build
+    runs-on: ubuntu-latest
+    # Must match the GitHub environment name configured as Trusted Publisher on npm.
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: crates/fusion-node
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # npm Trusted Publishing needs a recent npm CLI (11.5.1+)
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Ensure npm supports OIDC
+        run: npm install -g npm@latest
+
+      - name: Download all bindings
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: crates/fusion-node/artifacts
+          merge-multiple: true
+
+      - name: Install npm deps
+        run: npm install
+
+      - name: Collect .node binaries
+        shell: bash
+        run: |
+          shopt -s nullglob
+          cp artifacts/*.node . || true
+          ls -la *.node
+
+      - name: Sync package version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          npm version "$TAG" --no-git-tag-version --allow-same-version
+
+      # Do NOT set NODE_AUTH_TOKEN — that forces the legacy token path.
+      - name: Publish via OIDC
+        run: npm publish --access public --provenance

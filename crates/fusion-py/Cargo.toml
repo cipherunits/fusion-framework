@@ -1,0 +1,14 @@
+[package]
+name = "fusion-py"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "_fusion"
+crate-type = ["cdylib"]
+
+[dependencies]
+fusion-core = { workspace = true }
+pyo3 = { workspace = true }
+tokio = { workspace = true }
+bytes = { workspace = true }

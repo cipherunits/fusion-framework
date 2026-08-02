@@ -1,0 +1,20 @@
+[package]
+name = "fusion-core"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "fusion_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fusion-core"
+path = "src/main.rs"
+
+[dependencies]
+hyper = { workspace = true }
+tokio = { workspace = true }
+http-body-util = { workspace = true }
+hyper-util = { workspace = true }
+bytes = { workspace = true }
+http = { workspace = true }
