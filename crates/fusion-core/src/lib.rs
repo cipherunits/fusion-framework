@@ -11,7 +11,7 @@ mod settings;
 
 pub use coerce::{ParamKind, coerce_param, param_kind_from_name};
 pub use error::{Error, Result};
-pub use handler::Handler;
+pub use handler::{Handler, HandlerFuture, SyncHandler};
 pub use naming::{HTTP_METHODS, api_resource_name, resolve_route_path};
 pub use request::Request;
 pub use response::Response;

@@ -36,7 +36,7 @@ impl Router {
         });
     }
 
-    pub fn dispatch(&self, mut req: Request) -> Response {
+    pub async fn dispatch(&self, mut req: Request) -> Response {
         let method = req.method.to_uppercase();
         let path_segments = split_path(&req.path);
 
@@ -46,7 +46,7 @@ impl Router {
             }
             if let Some(params) = match_segments(&route.segments, &path_segments) {
                 req.params = params;
-                return route.handler.call(req);
+                return route.handler.call(req).await;
             }
         }
 
@@ -109,19 +109,24 @@ fn match_segments(pattern: &[Segment], path: &[&str]) -> Option<HashMap<String, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handler::SyncHandler;
     use crate::response::Response;
 
-    #[test]
-    fn matches_mixed_param_styles() {
+    #[tokio::test]
+    async fn matches_mixed_param_styles() {
         let mut router = Router::new();
-        router.route("GET", "/api/[name]/{id}", |req: Request| {
-            let name = req.params.get("name").cloned().unwrap_or_default();
-            let id = req.params.get("id").cloned().unwrap_or_default();
-            Response::text(200, format!("{name}:{id}"))
-        });
+        router.route(
+            "GET",
+            "/api/[name]/{id}",
+            SyncHandler(|req: Request| {
+                let name = req.params.get("name").cloned().unwrap_or_default();
+                let id = req.params.get("id").cloned().unwrap_or_default();
+                Response::text(200, format!("{name}:{id}"))
+            }),
+        );
 
         let req = Request::new("GET", "/api/alice/42", vec![], bytes::Bytes::new());
-        let res = router.dispatch(req);
+        let res = router.dispatch(req).await;
         assert_eq!(res.status, 200);
         assert_eq!(res.body.as_ref(), b"alice:42");
     }

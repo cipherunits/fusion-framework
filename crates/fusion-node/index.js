@@ -148,13 +148,8 @@ function invokeApiMethod(ApiClass, methodName, request) {
     }
     return native.coerceParamJs(String(params[name]), 'auto')
   })
-  const result = fn.apply(instance, args)
-  if (result != null && typeof result.then === 'function') {
-    throw new Error(
-      `async ${methodName}() is not supported in fusion-node yet; use a sync method`,
-    )
-  }
-  return result
+  // May return a value or a Promise — native call_async awaits Promises.
+  return fn.apply(instance, args)
 }
 
 class FusionApp {
@@ -172,8 +167,8 @@ class FusionApp {
         if (!definesMethod(ApiClass, methodName)) continue
         const boundClass = ApiClass
         const boundMethod = methodName
-        this.engine.route(methodName.toUpperCase(), routePath, (request) =>
-          invokeApiMethod(boundClass, boundMethod, request),
+        this.engine.route(methodName.toUpperCase(), routePath, async (request) =>
+          Promise.resolve(invokeApiMethod(boundClass, boundMethod, request)),
         )
       }
     }

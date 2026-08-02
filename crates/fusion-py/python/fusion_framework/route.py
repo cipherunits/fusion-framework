@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
 from typing import Any, Callable, Type
 
@@ -76,13 +75,11 @@ def _bind_kwargs(method: Callable[..., Any], params: dict[str, str]) -> dict[str
 
 
 def invoke_api_method(api_cls: Type[FusionBaseApi], method_name: str, request: dict[str, Any]) -> Any:
+    """Call the API method. May return a value or an awaitable (handled in Rust)."""
     instance = api_cls(request)
     method = getattr(instance, method_name)
     kwargs = _bind_kwargs(method, dict(request.get("params") or {}))
-    result = method(**kwargs)
-    if inspect.isawaitable(result):
-        result = asyncio.run(result)
-    return result
+    return method(**kwargs)
 
 
 # Re-export for callers that used the constant from this module historically.

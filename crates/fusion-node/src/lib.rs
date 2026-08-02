@@ -1,18 +1,26 @@
 use std::path::PathBuf;
-use std::sync::mpsc;
 use std::sync::Mutex;
 
 use fusion_core::{
-    App as CoreApp, Handler, Request, Response, Settings as CoreSettings, api_resource_name,
-    coerce_param, param_kind_from_name, resolve_route_path, response_from_value, HTTP_METHODS,
+    App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
+    api_resource_name, coerce_param, param_kind_from_name, resolve_route_path,
+    response_from_value, HTTP_METHODS,
 };
 use napi::bindgen_prelude::*;
-use napi::threadsafe_function::{
-    ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
-};
-use napi::{JsFunction, Status, ValueType};
+use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use napi::{JsFunction, ValueType};
 use napi_derive::napi;
 use serde_json::{Map, Number, Value as JsonValue};
+
+/// JSON extracted on the Node thread so the async result is `Send`.
+struct JsJson(JsonValue);
+
+impl FromNapiValue for JsJson {
+    unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> Result<Self> {
+        let unknown = unsafe { Unknown::from_napi_value(env, value)? };
+        Ok(JsJson(js_to_json(unknown)?))
+    }
+}
 
 // ─── JS ↔ JSON bridge ────────────────────────────────────────────────────────
 
@@ -241,44 +249,24 @@ struct ReturnJsHandler {
 }
 
 impl Handler for ReturnJsHandler {
-    fn call(&self, req: Request) -> Response {
-        let body = req.body_str();
-        let plain = PlainRequest {
-            method: req.method,
-            path: req.path,
-            body,
-            headers: req.headers,
-            params: req.params.into_iter().collect(),
-        };
+    fn call(&self, req: Request) -> HandlerFuture {
+        let tsfn = self.tsfn.clone();
+        Box::pin(async move {
+            let body = req.body_str();
+            let plain = PlainRequest {
+                method: req.method,
+                path: req.path,
+                body,
+                headers: req.headers,
+                params: req.params.into_iter().collect(),
+            };
 
-        let (tx, rx) = mpsc::channel();
-
-        let status = self.tsfn.call_with_return_value(
-            Ok(plain),
-            ThreadsafeFunctionCallMode::Blocking,
-            move |value: Unknown| {
-                let parsed = js_to_json(value).unwrap_or_else(|err| {
-                    JsonValue::Object(Map::from_iter([
-                        ("status".into(), JsonValue::Number(Number::from(500u64))),
-                        (
-                            "body".into(),
-                            JsonValue::String(format!("js handler error: {err}")),
-                        ),
-                    ]))
-                });
-                let _ = tx.send(parsed);
-                Ok(())
-            },
-        );
-
-        if status != Status::Ok {
-            return Response::text(500, format!("failed to call js handler: {status}"));
-        }
-
-        match rx.recv() {
-            Ok(value) => response_from_value(value),
-            Err(_) => Response::text(500, "js handler did not return a response"),
-        }
+            // call_async awaits JS Promises; JsJson converts on the Node thread (Send).
+            match tsfn.call_async::<JsJson>(Ok(plain)).await {
+                Ok(JsJson(json)) => response_from_value(json),
+                Err(err) => Response::text(500, format!("js handler error: {err}")),
+            }
+        })
     }
 }
 

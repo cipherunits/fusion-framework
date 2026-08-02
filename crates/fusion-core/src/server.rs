@@ -111,7 +111,7 @@ async fn handle_request(
     };
 
     let request = Request::new(method.clone(), path.clone(), headers, body_bytes);
-    let response = router.dispatch(request);
+    let response = router.dispatch(request).await;
     let status = response.status;
     let elapsed_ms = started.elapsed().as_millis();
 

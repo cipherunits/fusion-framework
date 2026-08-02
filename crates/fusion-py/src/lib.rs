@@ -3,8 +3,9 @@ use std::sync::Mutex;
 
 use bytes::Bytes;
 use fusion_core::{
-    App as CoreApp, Handler, Request, Response, Settings as CoreSettings, api_resource_name,
-    coerce_param, param_kind_from_name, resolve_route_path, response_from_value, HTTP_METHODS,
+    App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
+    api_resource_name, coerce_param, param_kind_from_name, resolve_route_path,
+    response_from_value, HTTP_METHODS,
 };
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
@@ -247,15 +248,23 @@ struct PyHandler {
 }
 
 impl Handler for PyHandler {
-    fn call(&self, req: Request) -> Response {
-        Python::with_gil(|py| match invoke_handler(py, &self.callback, req) {
-            Ok(response) => response,
-            Err(err) => Response::text(500, format!("handler error: {err}")),
+    fn call(&self, req: Request) -> HandlerFuture {
+        let callback = Python::with_gil(|py| self.callback.clone_ref(py));
+        Box::pin(async move {
+            match invoke_handler_async(callback, req).await {
+                Ok(response) => response,
+                Err(err) => Response::text(500, format!("handler error: {err}")),
+            }
         })
     }
 }
 
-fn invoke_handler(py: Python<'_>, callback: &PyObject, req: Request) -> PyResult<Response> {
+enum PyOutcome {
+    Ready(Response),
+    Pending(PyObject),
+}
+
+fn invoke_handler_start(py: Python<'_>, callback: &PyObject, req: Request) -> PyResult<PyOutcome> {
     let body = req.body_str();
     let py_req = PyDict::new(py);
     py_req.set_item("method", req.method)?;
@@ -275,7 +284,22 @@ fn invoke_handler(py: Python<'_>, callback: &PyObject, req: Request) -> PyResult
     py_req.set_item("params", params)?;
 
     let result = callback.call1(py, (py_req,))?;
-    if let Ok(dict) = result.downcast_bound::<PyDict>(py) {
+    let bound = result.bind(py);
+
+    // Real async: leave awaitables for the shared event loop.
+    let inspect = py.import("inspect")?;
+    let is_awaitable: bool = inspect
+        .call_method1("isawaitable", (bound,))?
+        .extract()?;
+    if is_awaitable {
+        return Ok(PyOutcome::Pending(result));
+    }
+
+    Ok(PyOutcome::Ready(py_value_to_response(py, bound)?))
+}
+
+fn py_value_to_response(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<Response> {
+    if let Ok(dict) = value.downcast::<PyDict>() {
         if let Some(body) = dict.get_item("body")? {
             if let Ok(bytes) = body.extract::<Vec<u8>>() {
                 let status: u16 = match dict.get_item("status")? {
@@ -294,9 +318,36 @@ fn invoke_handler(py: Python<'_>, callback: &PyObject, req: Request) -> PyResult
         }
     }
 
-    let value = py_to_json(py, result.bind(py))?;
-    Ok(response_from_value(value))
+    let json = py_to_json(py, value)?;
+    Ok(response_from_value(json))
 }
+
+async fn invoke_handler_async(callback: PyObject, req: Request) -> PyResult<Response> {
+    let outcome = Python::with_gil(|py| invoke_handler_start(py, &callback, req))?;
+    match outcome {
+        PyOutcome::Ready(response) => Ok(response),
+        PyOutcome::Pending(coro) => {
+            // Schedule on the shared asyncio loop (concurrent with other requests),
+            // then wait without blocking the tokio worker via spawn_blocking.
+            let concurrent = Python::with_gil(|py| -> PyResult<PyObject> {
+                let runtime = py.import("fusion_framework.async_runtime")?;
+                Ok(runtime.call_method1("submit", (coro,))?.unbind())
+            })?;
+
+            let result = tokio::task::spawn_blocking(move || {
+                Python::with_gil(|py| -> PyResult<PyObject> {
+                    let fut = concurrent.bind(py);
+                    Ok(fut.call_method0("result")?.unbind())
+                })
+            })
+            .await
+            .map_err(|e| PyRuntimeError::new_err(format!("async join: {e}")))??;
+
+            Python::with_gil(|py| py_value_to_response(py, result.bind(py)))
+        }
+    }
+}
+
 
 #[pyclass(name = "App")]
 struct PyApp {
