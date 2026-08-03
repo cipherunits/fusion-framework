@@ -26,9 +26,10 @@ jobs:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             build: npx napi build --platform --release --target x86_64-unknown-linux-gnu
-          - host: ubuntu-latest
+          # Native arm runner — avoids --use-napi-cross (napi-cli v3 only; we pin v2).
+          - host: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            build: npx napi build --platform --release --target aarch64-unknown-linux-gnu --use-napi-cross
+            build: npx napi build --platform --release --target aarch64-unknown-linux-gnu
           - host: windows-latest
             target: x86_64-pc-windows-msvc
             build: npx napi build --platform --release --target x86_64-pc-windows-msvc
