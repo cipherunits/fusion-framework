@@ -67,16 +67,12 @@ class FusionBaseApi {
     return this.request.params || {}
   }
 
-  ok(body = '', status = 200, headers = {}) {
-    return { status, body, headers }
-  }
-
-  json(data, status = 200) {
-    return {
-      status,
-      body: data,
-      headers: { 'content-type': 'application/json' },
+  response(body = '', status = 200, headers = {}) {
+    const out = { status, body, headers: { ...headers } }
+    if (body !== null && typeof body !== 'string' && !Buffer.isBuffer(body)) {
+      out.headers = { 'content-type': 'application/json', ...headers }
     }
+    return out
   }
 }
 

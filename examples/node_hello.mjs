@@ -30,7 +30,7 @@ export const MyFirstModule = router('/api/[module]/{id}')(
 export const RootApi = router('/')(
   class RootApi extends FusionBaseApi {
     get() {
-      return this.ok('fusion class-based api')
+      return this.response('fusion class-based api')
     }
   },
 )

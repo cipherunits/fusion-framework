@@ -33,15 +33,21 @@ class FusionBaseApi:
     def params(self) -> Mapping[str, str]:
         return self.request.get("params") or {}
 
-    def ok(self, body: Any = "", status: int = 200, **headers: str) -> dict[str, Any]:
+    def response(
+        self,
+        body: Any = "",
+        status: int = 200,
+        **headers: str,
+    ) -> dict[str, Any]:
+        """Build an HTTP envelope: ``{"status": ..., "body": ...}``.
+
+        Example::
+
+            return self.response({"message": "hello"}, status=200)
+        """
         response: dict[str, Any] = {"status": status, "body": body}
+        if not isinstance(body, (str, bytes)) and body is not None:
+            headers = {"content-type": "application/json", **headers}
         if headers:
             response["headers"] = headers
         return response
-
-    def json(self, data: Any, status: int = 200) -> dict[str, Any]:
-        return {
-            "status": status,
-            "body": data,
-            "headers": {"content-type": "application/json"},
-        }

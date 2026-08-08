@@ -8,6 +8,7 @@ mod router;
 mod serialize;
 mod server;
 mod settings;
+mod status;
 
 pub use coerce::{ParamKind, coerce_param, param_kind_from_name};
 pub use error::{Error, Result};
@@ -18,6 +19,9 @@ pub use response::Response;
 pub use router::Router;
 pub use serialize::{is_response_envelope, response_from_value};
 pub use settings::Settings;
+pub use status::{
+    HTTP_STATUS_CODES, is_client_error, is_informational, is_redirect, is_server_error, is_success,
+};
 
 use std::net::SocketAddr;
 

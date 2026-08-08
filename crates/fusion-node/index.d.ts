@@ -24,8 +24,7 @@ export class FusionBaseApi {
   readonly body: string
   readonly headers: Record<string, string>
   readonly params: Record<string, string>
-  ok(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
-  json(data: unknown, status?: number): FusionResponse
+  response(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
 }
 
 export class FusionApp {

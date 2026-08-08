@@ -5,7 +5,7 @@ use bytes::Bytes;
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
     api_resource_name, coerce_param, param_kind_from_name, resolve_route_path,
-    response_from_value, HTTP_METHODS,
+    response_from_value, HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
@@ -452,6 +452,7 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_resolve_route_path, m)?)?;
     m.add_function(wrap_pyfunction!(py_coerce_param, m)?)?;
     m.add("HTTP_METHODS", HTTP_METHODS)?;
+    add_status_module(m)?;
 
     // Global settings singleton — shared JSON/env logic from fusion-core.
     m.add(
@@ -463,5 +464,23 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
             },
         )?,
     )?;
+    Ok(())
+}
+
+fn add_status_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = parent.py();
+    let status = PyModule::new(py, "status")?;
+    let mut names = Vec::with_capacity(HTTP_STATUS_CODES.len());
+    for &(name, code) in HTTP_STATUS_CODES {
+        status.add(name, code)?;
+        names.push(name);
+    }
+    status.setattr("__all__", names)?;
+    parent.add_submodule(&status)?;
+    parent.setattr("status", &status)?;
+
+    let sys = py.import("sys")?;
+    let modules = sys.getattr("modules")?;
+    modules.set_item("fusion_framework._fusion.status", &status)?;
     Ok(())
 }
