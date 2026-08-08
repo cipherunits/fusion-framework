@@ -61,7 +61,7 @@ fn split_path(path: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Supports both `{id}` and `[name]` parameter segments.
+/// Supports both `{id}` and `[module]` parameter segments.
 fn parse_pattern(path: &str) -> Vec<Segment> {
     split_path(path)
         .into_iter()
@@ -117,11 +117,11 @@ mod tests {
         let mut router = Router::new();
         router.route(
             "GET",
-            "/api/[name]/{id}",
+            "/api/[module]/{id}",
             SyncHandler(|req: Request| {
-                let name = req.params.get("name").cloned().unwrap_or_default();
+                let module = req.params.get("module").cloned().unwrap_or_default();
                 let id = req.params.get("id").cloned().unwrap_or_default();
-                Response::text(200, format!("{name}:{id}"))
+                Response::text(200, format!("{module}:{id}"))
             }),
         );
 

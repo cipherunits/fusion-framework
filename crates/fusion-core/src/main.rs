@@ -6,11 +6,11 @@ async fn main() {
     app.route("GET", "/", SyncHandler(|_req: Request| Response::text(200, "ok")));
     app.route(
         "GET",
-        "/api/[name]/{id}",
+        "/api/[module]/{id}",
         SyncHandler(|req: Request| {
-            let name = req.params.get("name").map(|s| s.as_str()).unwrap_or("-");
+            let module = req.params.get("module").map(|s| s.as_str()).unwrap_or("-");
             let id = req.params.get("id").map(|s| s.as_str()).unwrap_or("-");
-            Response::text(200, format!("hello {name}/{id}"))
+            Response::text(200, format!("hello {module}/{id}"))
         }),
     );
 

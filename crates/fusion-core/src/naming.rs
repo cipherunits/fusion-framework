@@ -3,27 +3,32 @@
 /// Canonical HTTP handler method names (lowercase).
 pub const HTTP_METHODS: &[&str] = &["get", "post", "put", "patch", "delete", "head", "options"];
 
-/// `MyFirstApi` → `MyFirst`; names without an `Api`/`API` suffix are unchanged.
+/// `MyFirstModule` → `myfirst`; names without a `Module`/`MODULE` suffix are lowercased as-is.
 pub fn api_resource_name(class_name: &str) -> String {
-    if let Some(stem) = class_name.strip_suffix("Api") {
+    let stem = if let Some(stem) = class_name.strip_suffix("Module") {
         if !stem.is_empty() {
-            return stem.to_string();
+            stem
+        } else {
+            class_name
         }
-    }
-    if let Some(stem) = class_name.strip_suffix("API") {
+    } else if let Some(stem) = class_name.strip_suffix("MODULE") {
         if !stem.is_empty() {
-            return stem.to_string();
+            stem
+        } else {
+            class_name
         }
-    }
-    class_name.to_string()
+    } else {
+        class_name
+    };
+    stem.to_lowercase()
 }
 
-/// Expand the reserved `[name]` token using the API class name.
+/// Expand the reserved `[module]` token using the module class name.
 ///
-/// Example: `/api/[name]/{id}` + `ProductsApi` → `/api/Products/{id}`.
+/// Example: `/api/[module]/{id}` + `ProductsModule` → `/api/products/{id}`.
 /// Other `{param}` / `[param]` segments are left for the router.
 pub fn resolve_route_path(template: &str, class_name: &str) -> String {
-    template.replace("[name]", &api_resource_name(class_name))
+    template.replace("[module]", &api_resource_name(class_name))
 }
 
 #[cfg(test)]
@@ -31,21 +36,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn strips_api_suffix() {
-        assert_eq!(api_resource_name("ProductsApi"), "Products");
-        assert_eq!(api_resource_name("MyFirstAPI"), "MyFirst");
-        assert_eq!(api_resource_name("Health"), "Health");
+    fn strips_module_suffix_and_lowercases() {
+        assert_eq!(api_resource_name("ProductsModule"), "products");
+        assert_eq!(api_resource_name("MyFirstMODULE"), "myfirst");
+        assert_eq!(api_resource_name("Health"), "health");
     }
 
     #[test]
-    fn expands_name_token() {
+    fn expands_module_token() {
         assert_eq!(
-            resolve_route_path("/test/[name]", "ProductsApi"),
-            "/test/Products"
+            resolve_route_path("/test/[module]", "ProductsModule"),
+            "/test/products"
         );
         assert_eq!(
-            resolve_route_path("/api/[name]/{id}", "UserApi"),
-            "/api/User/{id}"
+            resolve_route_path("/api/[module]/{id}", "UserModule"),
+            "/api/user/{id}"
         );
     }
 }

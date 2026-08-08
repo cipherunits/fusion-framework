@@ -2,9 +2,9 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 const { FusionBaseApi, router } = require('../crates/fusion-node/index.js')
 
-// /api/[name]/{id} + MyFirstApi → /api/MyFirst/{id}
-export const MyFirstApi = router('/api/[name]/{id}')(
-  class MyFirstApi extends FusionBaseApi {
+// /api/[module]/{id} + MyFirstModule → /api/myfirst/{id}
+export const MyFirstModule = router('/api/[module]/{id}')(
+  class MyFirstModule extends FusionBaseApi {
     get(id) {
       return { status: 200, body: `hello from node, id=${id}` }
     }

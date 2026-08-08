@@ -2,9 +2,9 @@ from fusion_framework.api import FusionBaseApi
 from fusion_framework.route import router
 
 
-@router("/api/[name]/{id}")
-class MyFirstApi(FusionBaseApi):
-    # resolves to /api/MyFirst/{id}
+@router("/api/[module]/{id}")
+class MyFirstModule(FusionBaseApi):
+    # resolves to /api/myfirst/{id}
     def get(self, id: int):
         return {"status": 200, "body": f"hello from python, id={id}"}
 
