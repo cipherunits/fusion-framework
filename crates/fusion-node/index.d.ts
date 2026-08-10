@@ -24,7 +24,16 @@ export class FusionBaseApi {
   readonly body: string
   readonly headers: Record<string, string>
   readonly params: Record<string, string>
+  readonly query: Record<string, string>
   response(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
+}
+
+export class HTTPException extends Error {
+  status: number
+  detail: unknown
+  headers: Record<string, string>
+  constructor(status: number, detail?: unknown, headers?: Record<string, string>)
+  toResponse(): FusionResponse
 }
 
 export class FusionApp {
@@ -60,6 +69,7 @@ export interface FusionRequest {
   body: string
   headers: Record<string, string>
   params: Record<string, string>
+  query: Record<string, string>
 }
 
 export type FusionResponse =

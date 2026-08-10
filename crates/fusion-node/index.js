@@ -67,6 +67,10 @@ class FusionBaseApi {
     return this.request.params || {}
   }
 
+  get query() {
+    return this.request.query || {}
+  }
+
   response(body = '', status = 200, headers = {}) {
     const out = { status, body, headers: { ...headers } }
     if (body !== null && typeof body !== 'string' && !Buffer.isBuffer(body)) {
@@ -130,22 +134,89 @@ function extractParamNames(fn) {
     .split(',')
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => part.replace(/=.*$/, '').trim())
-    .filter((name) => name && name !== 'request')
+    .map((part) => ({
+      name: part.replace(/=.*$/, '').trim(),
+      optional: /=/.test(part),
+    }))
+    .filter(({ name }) => name && name !== 'request')
+}
+
+class HTTPException extends Error {
+  constructor(status, detail = null, headers = {}) {
+    super(typeof detail === 'string' ? detail : `HTTP ${status}`)
+    this.status = Number(status)
+    this.detail = detail == null ? '' : detail
+    this.headers = headers || {}
+  }
+
+  toResponse() {
+    const headers = { ...this.headers }
+    const body = this.detail
+    if (body !== null && typeof body !== 'string' && !Buffer.isBuffer(body)) {
+      headers['content-type'] = headers['content-type'] || 'application/json'
+    }
+    return { status: this.status, body, headers }
+  }
+}
+
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
+
+function parseJsonObject(body) {
+  if (body == null) return null
+  if (typeof body === 'object' && !Buffer.isBuffer(body) && !Array.isArray(body)) {
+    return body
+  }
+  const text = String(body).trim()
+  if (!text) return null
+  try {
+    const parsed = JSON.parse(text)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 function invokeApiMethod(ApiClass, methodName, request) {
   const instance = new ApiClass(request)
   const fn = instance[methodName]
-  const params = request.params || {}
-  const args = extractParamNames(fn).map((name) => {
-    if (!(name in params)) {
-      throw new Error(`missing path param '${name}'`)
-    }
-    return native.coerceParamJs(String(params[name]), 'auto')
-  })
-  // May return a value or a Promise — native call_async awaits Promises.
-  return fn.apply(instance, args)
+  const pathParams = request.params || {}
+  const queryParams = request.query || {}
+  const httpMethod = String(request.method || '').toUpperCase()
+  const bodyFields = BODY_METHODS.has(httpMethod) ? parseJsonObject(request.body) : null
+
+  try {
+    const args = extractParamNames(fn).map(({ name, optional }) => {
+      let raw
+      let source
+      if (Object.prototype.hasOwnProperty.call(pathParams, name)) {
+        source = 'path'
+        raw = pathParams[name]
+      } else if (BODY_METHODS.has(httpMethod)) {
+        if (bodyFields && Object.prototype.hasOwnProperty.call(bodyFields, name)) {
+          source = 'body'
+          raw = bodyFields[name]
+        }
+      } else if (Object.prototype.hasOwnProperty.call(queryParams, name)) {
+        source = 'query'
+        raw = queryParams[name]
+      }
+
+      if (source == null) {
+        if (optional) return undefined
+        // Missing query/body: pass null so the handler can raise HTTPException.
+        return null
+      }
+
+      if (source === 'body' && (typeof raw === 'number' || typeof raw === 'boolean')) {
+        return raw
+      }
+      return native.coerceParamJs(String(raw), 'auto')
+    })
+    return fn.apply(instance, args)
+  } catch (err) {
+    if (err instanceof HTTPException) return err.toResponse()
+    throw err
+  }
 }
 
 class FusionApp {
@@ -163,9 +234,14 @@ class FusionApp {
         if (!definesMethod(ApiClass, methodName)) continue
         const boundClass = ApiClass
         const boundMethod = methodName
-        this.engine.route(methodName.toUpperCase(), routePath, async (request) =>
-          Promise.resolve(invokeApiMethod(boundClass, boundMethod, request)),
-        )
+        this.engine.route(methodName.toUpperCase(), routePath, async (request) => {
+          try {
+            return await Promise.resolve(invokeApiMethod(boundClass, boundMethod, request))
+          } catch (err) {
+            if (err instanceof HTTPException) return err.toResponse()
+            throw err
+          }
+        })
       }
     }
     this.mounted = true
@@ -207,6 +283,7 @@ module.exports = {
   Settings: NativeSettings,
   FusionApp,
   FusionBaseApi,
+  HTTPException,
   router,
   apiResourceName,
   resolveRoutePath,

@@ -1,5 +1,6 @@
 from fusion_framework import status
 from fusion_framework.api import FusionBaseApi
+from fusion_framework.http import HTTPException
 from fusion_framework.route import router
 
 
@@ -12,9 +13,10 @@ class MyFirstModule(FusionBaseApi):
             status=status.HTTP_SUCCESS,
         )
 
-    def post(self, id: int):
+    def post(self, id: int, title: str = "untitled"):
+        # id ← path, title ← JSON body (optional via default)
         return self.response(
-            {"message": f"hello from python, id={id}"},
+            {"message": f"created id={id}", "title": title},
             status=status.HTTP_SUCCESS,
         )
 
@@ -35,6 +37,22 @@ class MyFirstModule(FusionBaseApi):
             {"message": f"hello from python, id={id}"},
             status=status.HTTP_SUCCESS,
         )
+
+
+@router("/api/[module]/")
+class ProductModule(FusionBaseApi):
+    # resolves to /api/product/
+    def get(self, id: int):
+        # GET /api/product/?id=12 — missing id arrives as None
+        if not id:
+            raise HTTPException(400, {"message": "undefined id"})
+        return self.response({"products_id": id}, status=status.HTTP_SUCCESS)
+
+    def post(self, id: int):
+        # POST /api/product/  body={"id": 12}
+        if not id:
+            raise HTTPException(400, {"message": "undefined id"})
+        return self.response({"products_id": id}, status=status.HTTP_SUCCESS)
 
 
 @router("/")

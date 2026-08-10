@@ -33,6 +33,10 @@ class FusionBaseApi:
     def params(self) -> Mapping[str, str]:
         return self.request.get("params") or {}
 
+    @property
+    def query(self) -> Mapping[str, str]:
+        return self.request.get("query") or {}
+
     def response(
         self,
         body: Any = "",

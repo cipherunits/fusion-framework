@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytes::Bytes;
+use console::{style, Term};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
@@ -15,11 +16,34 @@ use tokio::net::TcpListener;
 use tokio::signal;
 
 use crate::error::{Error, Result};
-use crate::request::Request;
+use crate::request::{parse_query, Request};
 use crate::response::Response;
 use crate::router::Router;
 
+fn enable_colors() {
+    // Touching Term initializes Windows VT processing when available.
+    let _ = Term::stdout();
+    let _ = Term::stderr();
+    // Force ANSI even when stdout is not detected as a TTY (common under
+    // language bindings like Python/Node).
+    console::set_colors_enabled(true);
+    console::set_colors_enabled_stderr(true);
+}
+
+fn color_status(status: u16) -> console::StyledObject<u16> {
+    let styled = match status {
+        200..=299 => style(status).green(),
+        300..=399 => style(status).yellow(),
+        400..=499 => style(status).red(),
+        500..=599 => style(status).red(),
+        _ => style(status).magenta(),
+    };
+    styled.force_styling(true)
+}
+
 pub async fn listen(router: Router, addr: SocketAddr) -> Result<()> {
+    enable_colors();
+
     let listener = TcpListener::bind(addr).await?;
     let router = Arc::new(router);
 
@@ -29,7 +53,10 @@ pub async fn listen(router: Router, addr: SocketAddr) -> Result<()> {
     loop {
         tokio::select! {
             _ = &mut shutdown => {
-                eprintln!("fusion: shutting down");
+                eprintln!(
+                    "{}",
+                    style("fusion: shutting down").yellow().force_styling(true)
+                );
                 break;
             }
             accepted = listener.accept() => {
@@ -46,7 +73,12 @@ pub async fn listen(router: Router, addr: SocketAddr) -> Result<()> {
                     });
 
                     if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
-                        eprintln!("connection error: {err}");
+                        eprintln!(
+                            "{}",
+                            style(format!("connection error: {err}"))
+                                .red()
+                                .force_styling(true)
+                        );
                     }
                 });
             }
@@ -59,7 +91,12 @@ pub async fn listen(router: Router, addr: SocketAddr) -> Result<()> {
 async fn shutdown_signal() {
     let ctrl_c = async {
         if let Err(err) = signal::ctrl_c().await {
-            eprintln!("fusion: failed to listen for Ctrl+C: {err}");
+            eprintln!(
+                "{}",
+                style(format!("fusion: failed to listen for Ctrl+C: {err}"))
+                    .red()
+                    .force_styling(true)
+            );
         }
     };
 
@@ -70,7 +107,12 @@ async fn shutdown_signal() {
                 stream.recv().await;
             }
             Err(err) => {
-                eprintln!("fusion: failed to listen for SIGTERM: {err}");
+                eprintln!(
+                    "{}",
+                    style(format!("fusion: failed to listen for SIGTERM: {err}"))
+                        .red()
+                        .force_styling(true)
+                );
                 std::future::pending::<()>().await;
             }
         }
@@ -92,6 +134,7 @@ async fn handle_request(
 ) -> std::result::Result<HyperResponse<Full<Bytes>>, Infallible> {
     let method = req.method().as_str().to_string();
     let path = req.uri().path().to_string();
+    let query = parse_query(req.uri().query().unwrap_or(""));
     let started = Instant::now();
 
     let headers = req
@@ -110,24 +153,25 @@ async fn handle_request(
         Err(_) => Bytes::new(),
     };
 
-    let request = Request::new(method.clone(), path.clone(), headers, body_bytes);
+    let request =
+        Request::new(method.clone(), path.clone(), headers, body_bytes).with_query(query);
+
     let response = router.dispatch(request).await;
-    let status = response.status;
+
+    let path_color = style(&path).blue().force_styling(true);
+    let method_color = style(&method).cyan().force_styling(true);
+    let status_color = color_status(response.status);
     let elapsed_ms = started.elapsed().as_millis();
 
-    println!("{peer} {method} {path} -> {status} ({elapsed_ms}ms)");
+    println!("{peer} {method_color} {path_color} -> {status_color} ({elapsed_ms}ms)");
     let _ = io::stdout().flush();
-
     Ok(to_hyper_response(response))
 }
-
 fn to_hyper_response(response: Response) -> HyperResponse<Full<Bytes>> {
     let mut builder = HyperResponse::builder().status(response.status);
-
     for (name, value) in &response.headers {
         builder = builder.header(name.as_str(), value.as_str());
     }
-
     builder
         .body(Full::new(response.body))
         .unwrap_or_else(|_| {

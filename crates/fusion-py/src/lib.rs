@@ -253,7 +253,18 @@ impl Handler for PyHandler {
         Box::pin(async move {
             match invoke_handler_async(callback, req).await {
                 Ok(response) => response,
-                Err(err) => Response::text(500, format!("handler error: {err}")),
+                Err(err) => {
+                    let message = err.to_string();
+                    let status = if message.contains("missing path param")
+                        || message.contains("missing query param")
+                        || message.contains("missing body param")
+                    {
+                        400
+                    } else {
+                        500
+                    };
+                    Response::text(status, format!("handler error: {err}"))
+                }
             }
         })
     }
@@ -282,6 +293,12 @@ fn invoke_handler_start(py: Python<'_>, callback: &PyObject, req: Request) -> Py
         params.set_item(name, value)?;
     }
     py_req.set_item("params", params)?;
+
+    let query = PyDict::new(py);
+    for (name, value) in req.query {
+        query.set_item(name, value)?;
+    }
+    py_req.set_item("query", query)?;
 
     let result = callback.call1(py, (py_req,))?;
     let bound = result.bind(py);

@@ -242,6 +242,7 @@ struct PlainRequest {
     body: String,
     headers: Vec<(String, String)>,
     params: Vec<(String, String)>,
+    query: Vec<(String, String)>,
 }
 
 struct ReturnJsHandler {
@@ -259,12 +260,24 @@ impl Handler for ReturnJsHandler {
                 body,
                 headers: req.headers,
                 params: req.params.into_iter().collect(),
+                query: req.query.into_iter().collect(),
             };
 
             // call_async awaits JS Promises; JsJson converts on the Node thread (Send).
             match tsfn.call_async::<JsJson>(Ok(plain)).await {
                 Ok(JsJson(json)) => response_from_value(json),
-                Err(err) => Response::text(500, format!("js handler error: {err}")),
+                Err(err) => {
+                    let message = err.to_string();
+                    let status = if message.contains("missing path param")
+                        || message.contains("missing query param")
+                        || message.contains("missing body param")
+                    {
+                        400
+                    } else {
+                        500
+                    };
+                    Response::text(status, format!("js handler error: {err}"))
+                }
             }
         })
     }
@@ -280,6 +293,7 @@ fn make_tsfn(
             body,
             headers,
             params,
+            query,
         } = ctx.value;
 
         let mut obj = ctx.env.create_object()?;
@@ -298,6 +312,12 @@ fn make_tsfn(
             params_obj.set_named_property(&name, value)?;
         }
         obj.set_named_property("params", params_obj)?;
+
+        let mut query_obj = ctx.env.create_object()?;
+        for (name, value) in query {
+            query_obj.set_named_property(&name, value)?;
+        }
+        obj.set_named_property("query", query_obj)?;
 
         Ok(vec![obj])
     })
