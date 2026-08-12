@@ -29,7 +29,43 @@ if __name__ == "__main__":
     run()
 ```
 
+## تنظیمات Swagger
 
+در `fusion.<env>.json` (همان فایلی که `fusion init` می‌سازد) بلاک `swagger` را ویرایش کن:
+
+```json
+{
+  "env": "dev",
+  "config": {
+    "host": "127.0.0.1",
+    "port": 8080,
+    "swagger": {
+      "enabled": true,
+      "path": "/swagger",
+      "title": "Fusion API Docs",
+      "info": {
+        "title": "Fusion API",
+        "version": "1.0.0",
+        "description": "My API docs"
+      },
+      "ui": {
+        "deepLinking": true,
+        "docExpansion": "list",
+        "filter": true,
+        "tryItOutEnabled": true,
+        "persistAuthorization": false,
+        "displayRequestDuration": true
+      }
+    }
+  }
+}
+```
+
+- `enabled` / `path`: روشن/خاموش و آدرس UI (پیش‌فرض `/swagger`)
+- `info`: فیلدهای OpenAPI `info` (title/version/description/...)
+- `ui`: گزینه‌های [Swagger UI](https://swagger.io/docs/open-source-tools/swagger-ui/usage/configuration/)
+
+متادیتای هر endpoint همچنان از `@route(..., tags=..., desc=..., title=..., deprecated=...)` می‌آید.
 
 ## قرارداد Handlerها
 

@@ -66,3 +66,23 @@ new FusionApp().listen()
 - `crates/fusion-node/index.d.ts`
   - TypeScript typings برای API.
 
+## تنظیمات Swagger
+
+در `fusion.<env>.json`:
+
+```json
+{
+  "config": {
+    "swagger": {
+      "enabled": true,
+      "path": "/swagger",
+      "title": "Fusion API Docs",
+      "info": { "title": "Fusion API", "version": "1.0.0", "description": "..." },
+      "ui": { "docExpansion": "list", "filter": true, "tryItOutEnabled": true }
+    }
+  }
+}
+```
+
+`swagger.ui` مستقیماً به گزینه‌های Swagger UI Bundle پاس داده می‌شود.
+

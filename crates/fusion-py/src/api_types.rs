@@ -38,9 +38,9 @@ fn extract_path_params_from_pattern(path: &str) -> Vec<String> {
         .collect()
 }
 
-fn schema_for_param(kind: ParamKind) -> serde_json::Value {
+fn schema_for_param(kind: ParamKind, nullable: bool) -> serde_json::Value {
     use serde_json::json;
-    match kind {
+    let mut schema = match kind {
         ParamKind::String => json!({ "type": "string" }),
         ParamKind::Int => json!({ "type": "integer", "format": "int64" }),
         ParamKind::Float => json!({ "type": "number" }),
@@ -53,7 +53,13 @@ fn schema_for_param(kind: ParamKind) -> serde_json::Value {
                 { "type": "string" }
             ]
         }),
+    };
+    if nullable {
+        if let Some(obj) = schema.as_object_mut() {
+            obj.insert("nullable".to_string(), serde_json::Value::Bool(true));
+        }
     }
+    schema
 }
 
 // ─── FusionBaseApi ───────────────────────────────────────────────────────────
@@ -468,6 +474,13 @@ fn extract_param_specs(py: Python<'_>, method: &Bound<'_, PyAny>) -> PyResult<Ve
     let get_origin = typing.getattr("get_origin")?;
     let get_args = typing.getattr("get_args")?;
 
+    // Prefer resolved hints so `from __future__ import annotations` / string
+    // annotations like `"Optional[int]"` still detect optional correctly.
+    let resolved_hints = typing
+        .call_method1("get_type_hints", (method,))
+        .ok()
+        .and_then(|h| h.downcast::<PyDict>().ok().map(|d| d.to_owned()));
+
     let mut specs = Vec::new();
     // `inspect.Signature.parameters` is typically a `mappingproxy`,
     // so convert to a real dict for easier iteration.
@@ -482,7 +495,14 @@ fn extract_param_specs(py: Python<'_>, method: &Bound<'_, PyAny>) -> PyResult<Ve
             continue;
         }
 
-        let annotation = param.getattr("annotation")?;
+        let annotation = if let Some(ref hints) = resolved_hints {
+            match hints.get_item(&name)? {
+                Some(hint) => hint,
+                None => param.getattr("annotation")?,
+            }
+        } else {
+            param.getattr("annotation")?
+        };
         let default = param.getattr("default")?;
         let has_default = !default.eq(&empty)?;
 
@@ -498,6 +518,29 @@ fn extract_param_specs(py: Python<'_>, method: &Bound<'_, PyAny>) -> PyResult<Ve
     Ok(specs)
 }
 
+fn is_none_type(py: Python<'_>, value: &Bound<'_, PyAny>) -> bool {
+    // `typing.get_args(Optional[T])` yields `(T, type(None))`, not `None`.
+    let none_type = py.None().bind(py).get_type();
+    value.is(none_type.as_any()) || value.eq(py.None()).unwrap_or(false)
+}
+
+fn is_union_origin(py: Python<'_>, origin: &Bound<'_, PyAny>) -> PyResult<bool> {
+    let typing = py.import("typing")?;
+    let union = typing.getattr("Union")?;
+    if origin.eq(&union)? {
+        return Ok(true);
+    }
+    // PEP 604 unions: `int | None` use `types.UnionType`.
+    if let Ok(types_mod) = py.import("types") {
+        if let Ok(union_type) = types_mod.getattr("UnionType") {
+            if origin.eq(&union_type)? {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
 fn classify_annotation(
     py: Python<'_>,
     annotation: &Bound<'_, PyAny>,
@@ -510,23 +553,26 @@ fn classify_annotation(
         return Ok((false, ParamKind::String));
     }
 
+    // Bare `None` / `NoneType` annotation → optional string.
+    if is_none_type(py, annotation) {
+        return Ok((true, ParamKind::String));
+    }
+
     let origin = get_origin.call1((annotation,))?;
-    if !origin.is_none() {
-        let typing = py.import("typing")?;
-        let union_type = typing.getattr("Union")?;
-        if origin.eq(&union_type)? {
-            let args = get_args.call1((annotation,))?;
-            let args_list: Vec<Bound<'_, PyAny>> = args.try_iter()?.collect::<PyResult<_>>()?;
-            let py_none = py.None();
-            let has_none = args_list.iter().any(|a| a.eq(&py_none).unwrap_or(false));
-            let non_none: Vec<_> = args_list
-                .into_iter()
-                .filter(|a| !a.eq(&py_none).unwrap_or(false))
-                .collect();
-            if has_none && non_none.len() == 1 {
-                let kind = annotation_kind(py, &non_none[0])?;
-                return Ok((true, kind));
-            }
+    if !origin.is_none() && is_union_origin(py, &origin)? {
+        let args = get_args.call1((annotation,))?;
+        let args_list: Vec<Bound<'_, PyAny>> = args.try_iter()?.collect::<PyResult<_>>()?;
+        let has_none = args_list.iter().any(|a| is_none_type(py, a));
+        let non_none: Vec<_> = args_list
+            .into_iter()
+            .filter(|a| !is_none_type(py, a))
+            .collect();
+        if has_none && non_none.len() == 1 {
+            let kind = annotation_kind(py, &non_none[0])?;
+            return Ok((true, kind));
+        }
+        if has_none && non_none.is_empty() {
+            return Ok((true, ParamKind::String));
         }
     }
 
@@ -595,24 +641,28 @@ pub fn openapi_spec() -> serde_json::Value {
             let mut body_required: Vec<String> = Vec::new();
 
             for spec in specs {
+                let nullable = spec.optional || spec.has_default;
+                let required = !nullable;
                 if path_params.iter().any(|p| p == &spec.name) {
+                    // OpenAPI normally requires path params, but if the Python
+                    // signature marks them Optional / defaulted, expose that in Swagger.
                     operation_params.push(json!({
                         "name": spec.name,
                         "in": "path",
-                        "required": true,
-                        "schema": schema_for_param(spec.kind),
+                        "required": required,
+                        "schema": schema_for_param(spec.kind, nullable),
                     }));
                 } else if method_upper == "POST" || method_upper == "PUT" || method_upper == "PATCH" {
-                    body_properties.insert(spec.name.clone(), schema_for_param(spec.kind));
-                    if !spec.optional && !spec.has_default {
+                    body_properties.insert(spec.name.clone(), schema_for_param(spec.kind, nullable));
+                    if required {
                         body_required.push(spec.name.clone());
                     }
                 } else {
                     operation_params.push(json!({
                         "name": spec.name,
                         "in": "query",
-                        "required": !(spec.optional || spec.has_default),
-                        "schema": schema_for_param(spec.kind),
+                        "required": required,
+                        "schema": schema_for_param(spec.kind, nullable),
                     }));
                 }
             }

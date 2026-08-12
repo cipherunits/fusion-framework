@@ -161,6 +161,74 @@ class HTTPException extends Error {
   }
 }
 
+function asObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function readSwaggerSettings() {
+  const enabled = settings.get('swagger.enabled', true)
+  if (enabled === false || enabled === 0 || enabled === 'false' || enabled === '0' || enabled === 'off') {
+    return { enabled: false }
+  }
+
+  let pathValue = settings.get('swagger.path', '/swagger')
+  if (pathValue === false || pathValue === null || pathValue === '' || pathValue === 'false' || pathValue === 'off') {
+    return { enabled: false }
+  }
+
+  let prefix = String(pathValue).replace(/\/+$/, '') || '/swagger'
+  if (!prefix.startsWith('/')) prefix = `/${prefix}`
+
+  const info = asObject(settings.get('swagger.info', {}))
+  for (const key of ['title', 'version', 'description']) {
+    const flat = settings.get(`swagger.${key}`, undefined)
+    if (flat !== undefined && flat !== null && info[key] === undefined) info[key] = flat
+  }
+  if (!info.title) info.title = 'fusion-framework'
+  if (!info.version) info.version = '1.0.0'
+
+  const pageTitle = settings.get('swagger.title', null) || info.title || 'Fusion API Docs'
+  const ui = {
+    deepLinking: true,
+    displayOperationId: false,
+    defaultModelsExpandDepth: 1,
+    docExpansion: 'list',
+    filter: true,
+    tryItOutEnabled: true,
+    persistAuthorization: false,
+    displayRequestDuration: true,
+    ...asObject(settings.get('swagger.ui', {})),
+  }
+
+  return { enabled: true, path: prefix, pageTitle: String(pageTitle), info, ui }
+}
+
+function swaggerUiHtml(swagger, openapiUrl) {
+  const uiOpts = { ...swagger.ui, url: openapiUrl, dom_id: '#swagger-ui' }
+  const uiJson = JSON.stringify(uiOpts).replace(/</g, '\\u003c')
+  const title = String(swagger.pageTitle)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${title}</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    <script>
+      window.onload = function() {
+        SwaggerUIBundle(${uiJson});
+      };
+    </script>
+  </body>
+</html>`
+}
+
 class FusionApp {
   constructor(customSettings) {
     if (customSettings) settings.merge(customSettings)
@@ -188,15 +256,13 @@ class FusionApp {
       }
     }
 
-    // Swagger UI endpoints (approx for Node)
-    const swaggerPath = settings.get('swagger.path', '/swagger')
-    if (swaggerPath) {
-      const prefix = String(swaggerPath).replace(/\\/+$/, '')
-      const openapiUrl = `${prefix}/openapi.json`
+    const swagger = readSwaggerSettings()
+    if (swagger.enabled) {
+      const prefix = swagger.path
 
       const openapi = {
         openapi: '3.0.3',
-        info: { title: 'fusion-framework', version: '0.1.0' },
+        info: { ...swagger.info },
         paths: {},
       }
 
@@ -208,7 +274,7 @@ class FusionApp {
       }
 
       for (const item of registry) {
-        const { path: p, ApiClass, swagger } = item
+        const { path: p, ApiClass, swagger: routeSwagger } = item
         const pathParams = parsePathParams(p)
         const resolvedPath = p.startsWith('/') ? p : `/${p}`
 
@@ -228,10 +294,10 @@ class FusionApp {
           }))
 
           openapi.paths[resolvedPath][methodLower] = {
-            tags: swagger?.tags?.length ? swagger.tags : [],
-            summary: swagger?.title ?? `${ApiClass.name}.${methodUpper}`,
-            description: swagger?.description ?? '',
-            deprecated: !!swagger?.deprecated,
+            tags: routeSwagger?.tags?.length ? routeSwagger.tags : [],
+            summary: routeSwagger?.title ?? `${ApiClass.name}.${methodUpper}`,
+            description: routeSwagger?.description ?? '',
+            deprecated: !!routeSwagger?.deprecated,
             operationId: `${ApiClass.name}_${methodLower}`,
             parameters: params,
             responses: { '200': { description: 'OK' } },
@@ -242,23 +308,7 @@ class FusionApp {
       this.engine.route('GET', `${prefix}/openapi.json`, async () => openapi)
       this.engine.route('GET', prefix, async () => ({
         status: 200,
-        body: `<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Fusion Swagger</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
-  </head>
-  <body>
-    <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
-    <script>
-      window.onload = function() {
-        SwaggerUIBundle({ url: '${openapiUrl}', dom_id: '#swagger-ui' });
-      };
-    </script>
-  </body>
-</html>`,
+        body: swaggerUiHtml(swagger, `${prefix}/openapi.json`),
         headers: { 'content-type': 'text/html' },
       }))
     }
