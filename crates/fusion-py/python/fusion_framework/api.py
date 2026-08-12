@@ -6,7 +6,13 @@ from fusion_framework._fusion import HTTP_METHODS
 
 
 class FusionBaseApi:
-    """Host-language request view. Serialization rules live in fusion-core."""
+    """Thin Python interface (subclassable).
+
+    The framework core does:
+    - request parsing (method/path/query/body)
+    - parameter binding to your handler signature
+    - response serialization and JSON encoding
+    """
 
     HTTP_METHODS = HTTP_METHODS
 
@@ -37,21 +43,14 @@ class FusionBaseApi:
     def query(self) -> Mapping[str, str]:
         return self.request.get("query") or {}
 
-    def response(
-        self,
-        body: Any = "",
-        status: int = 200,
-        **headers: str,
-    ) -> dict[str, Any]:
-        """Build an HTTP envelope: ``{"status": ..., "body": ...}``.
-
-        Example::
-
-            return self.response({"message": "hello"}, status=200)
-        """
+    def response(self, body: Any = "", status: int = 200, **headers: str) -> dict[str, Any]:
+        """Build an HTTP envelope: ``{\"status\": ..., \"body\": ...}``."""
         response: dict[str, Any] = {"status": status, "body": body}
         if not isinstance(body, (str, bytes)) and body is not None:
             headers = {"content-type": "application/json", **headers}
         if headers:
             response["headers"] = headers
         return response
+
+
+__all__ = ["FusionBaseApi"]

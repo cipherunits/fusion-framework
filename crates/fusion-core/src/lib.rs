@@ -1,6 +1,9 @@
+mod api_context;
 mod coerce;
+mod dispatch;
 mod error;
 mod handler;
+mod http_error;
 mod naming;
 mod request;
 mod response;
@@ -10,9 +13,12 @@ mod server;
 mod settings;
 mod status;
 
+pub use api_context::ApiContext;
 pub use coerce::{ParamKind, coerce_param, param_kind_from_name};
+pub use dispatch::{ParamSpec, bind_args, build_response, parse_json_object, BODY_METHODS};
 pub use error::{Error, Result};
 pub use handler::{Handler, HandlerFuture, SyncHandler};
+pub use http_error::HttpError;
 pub use naming::{HTTP_METHODS, api_resource_name, resolve_route_path};
 pub use request::{parse_query, Request};
 pub use response::Response;

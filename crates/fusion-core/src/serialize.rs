@@ -82,6 +82,25 @@ fn response_from_envelope(map: Map<String, Value>) -> Response {
         }
     }
 
+    // Convenience: if the handler returned a framework envelope with a non-string body
+    // but did not explicitly set `content-type`, assume JSON.
+    //
+    // This keeps host-language helpers (Python/Node) thin.
+    let has_content_type = response
+        .headers
+        .iter()
+        .any(|(k, _)| k.eq_ignore_ascii_case("content-type"));
+    if !has_content_type {
+        match map.get("body") {
+            Some(Value::String(_)) | None | Some(Value::Null) => {}
+            Some(_) => {
+                response
+                    .headers
+                    .push(("content-type".into(), CONTENT_TYPE_JSON.into()));
+            }
+        }
+    }
+
     response
 }
 

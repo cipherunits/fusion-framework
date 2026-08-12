@@ -1,16 +1,14 @@
+"""Re-export ``HTTPException`` — response building lives in Rust."""
+
 from __future__ import annotations
 
 from typing import Any
 
+from fusion_framework._fusion import http_error_to_response
+
 
 class HTTPException(Exception):
-    """Raise inside a handler (or let binding raise it) to return an HTTP error.
-
-    Example::
-
-        raise HTTPException(400, {"message": "undefined id"})
-        raise HTTPException(404, "not found")
-    """
+    """Raise inside a handler to return an HTTP error response."""
 
     def __init__(self, status: int, detail: Any = None, **headers: str):
         self.status = int(status)
@@ -24,11 +22,4 @@ class HTTPException(Exception):
         return f"HTTP {self.status}"
 
     def to_response(self) -> dict[str, Any]:
-        body = self.detail
-        headers = dict(self.headers)
-        if not isinstance(body, (str, bytes)) and body is not None:
-            headers = {"content-type": "application/json", **headers}
-        response: dict[str, Any] = {"status": self.status, "body": body}
-        if headers:
-            response["headers"] = headers
-        return response
+        return http_error_to_response(self.status, self.detail, **self.headers)

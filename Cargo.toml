@@ -4,6 +4,7 @@ members = [
     "crates/fusion-core",
     "crates/fusion-py",
     "crates/fusion-node",
+    "bench",
 ]
 
 [workspace.package]

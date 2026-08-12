@@ -72,10 +72,10 @@ class FusionBaseApi {
   }
 
   response(body = '', status = 200, headers = {}) {
-    const out = { status, body, headers: { ...headers } }
-    if (body !== null && typeof body !== 'string' && !Buffer.isBuffer(body)) {
-      out.headers = { 'content-type': 'application/json', ...headers }
-    }
+    // Keep this helper thin: content-type inference lives in fusion-core.
+    const out = { status, body }
+    const keys = headers ? Object.keys(headers) : []
+    if (keys.length) out.headers = { ...headers }
     return out
   }
 }
@@ -89,12 +89,28 @@ function resolveRoutePath(routePath, ApiClass) {
   return native.resolveRoutePathJs(routePath, ApiClass.name)
 }
 
-function router(routePath) {
+function router(routePath, options = {}) {
   return function decorate(ApiClass) {
-    const resolved = resolveRoutePath(routePath, ApiClass)
+    const resolvedBase = resolveRoutePath(routePath, ApiClass)
+
+    const v = (options.version ?? '').toString().trim()
+    const resolved =
+      v.length > 0 ? `${v}/${resolvedBase.replace(/^\\/+/, '')}` : resolvedBase
+
     ApiClass.__fusion_path__ = resolved
     ApiClass.__fusion_path_template__ = routePath
-    registry.push({ path: resolved, ApiClass })
+
+    registry.push({
+      path: resolved,
+      ApiClass,
+      swagger: {
+        tags: Array.isArray(options.tags) ? options.tags : [],
+        description: options.desc ?? null,
+        title: options.title ?? null,
+        deprecated: !!options.deprecated,
+      },
+      version_prefix: v,
+    })
     return ApiClass
   }
 }
@@ -126,21 +142,6 @@ function definesMethod(ApiClass, methodName) {
   return false
 }
 
-function extractParamNames(fn) {
-  const src = Function.prototype.toString.call(fn)
-  const match = src.match(/^[^(]*\(([^)]*)\)/)
-  if (!match) return []
-  return match[1]
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => ({
-      name: part.replace(/=.*$/, '').trim(),
-      optional: /=/.test(part),
-    }))
-    .filter(({ name }) => name && name !== 'request')
-}
-
 class HTTPException extends Error {
   constructor(status, detail = null, headers = {}) {
     super(typeof detail === 'string' ? detail : `HTTP ${status}`)
@@ -152,70 +153,11 @@ class HTTPException extends Error {
   toResponse() {
     const headers = { ...this.headers }
     const body = this.detail
-    if (body !== null && typeof body !== 'string' && !Buffer.isBuffer(body)) {
-      headers['content-type'] = headers['content-type'] || 'application/json'
-    }
-    return { status: this.status, body, headers }
-  }
-}
-
-const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
-
-function parseJsonObject(body) {
-  if (body == null) return null
-  if (typeof body === 'object' && !Buffer.isBuffer(body) && !Array.isArray(body)) {
-    return body
-  }
-  const text = String(body).trim()
-  if (!text) return null
-  try {
-    const parsed = JSON.parse(text)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-function invokeApiMethod(ApiClass, methodName, request) {
-  const instance = new ApiClass(request)
-  const fn = instance[methodName]
-  const pathParams = request.params || {}
-  const queryParams = request.query || {}
-  const httpMethod = String(request.method || '').toUpperCase()
-  const bodyFields = BODY_METHODS.has(httpMethod) ? parseJsonObject(request.body) : null
-
-  try {
-    const args = extractParamNames(fn).map(({ name, optional }) => {
-      let raw
-      let source
-      if (Object.prototype.hasOwnProperty.call(pathParams, name)) {
-        source = 'path'
-        raw = pathParams[name]
-      } else if (BODY_METHODS.has(httpMethod)) {
-        if (bodyFields && Object.prototype.hasOwnProperty.call(bodyFields, name)) {
-          source = 'body'
-          raw = bodyFields[name]
-        }
-      } else if (Object.prototype.hasOwnProperty.call(queryParams, name)) {
-        source = 'query'
-        raw = queryParams[name]
-      }
-
-      if (source == null) {
-        if (optional) return undefined
-        // Missing query/body: pass null so the handler can raise HTTPException.
-        return null
-      }
-
-      if (source === 'body' && (typeof raw === 'number' || typeof raw === 'boolean')) {
-        return raw
-      }
-      return native.coerceParamJs(String(raw), 'auto')
-    })
-    return fn.apply(instance, args)
-  } catch (err) {
-    if (err instanceof HTTPException) return err.toResponse()
-    throw err
+    // Keep this helper thin: content-type inference lives in fusion-core.
+    const out = { status: this.status, body }
+    const keys = headers ? Object.keys(headers) : []
+    if (keys.length) out.headers = headers
+    return out
   }
 }
 
@@ -232,11 +174,12 @@ class FusionApp {
     for (const { path: routePath, ApiClass } of registry) {
       for (const methodName of HTTP_METHODS) {
         if (!definesMethod(ApiClass, methodName)) continue
-        const boundClass = ApiClass
-        const boundMethod = methodName
         this.engine.route(methodName.toUpperCase(), routePath, async (request) => {
           try {
-            return await Promise.resolve(invokeApiMethod(boundClass, boundMethod, request))
+            const instance = new ApiClass(request)
+            const fn = instance[methodName]
+            // No-arg handler contract: use `this.params`, `this.query`, `this.body`.
+            return await Promise.resolve(fn.call(instance))
           } catch (err) {
             if (err instanceof HTTPException) return err.toResponse()
             throw err
@@ -244,6 +187,82 @@ class FusionApp {
         })
       }
     }
+
+    // Swagger UI endpoints (approx for Node)
+    const swaggerPath = settings.get('swagger.path', '/swagger')
+    if (swaggerPath) {
+      const prefix = String(swaggerPath).replace(/\\/+$/, '')
+      const openapiUrl = `${prefix}/openapi.json`
+
+      const openapi = {
+        openapi: '3.0.3',
+        info: { title: 'fusion-framework', version: '0.1.0' },
+        paths: {},
+      }
+
+      const parsePathParams = (pattern) => {
+        return String(pattern)
+          .split('/')
+          .filter((seg) => (seg.startsWith('{') && seg.endsWith('}')) || (seg.startsWith('[') && seg.endsWith(']')))
+          .map((seg) => seg.slice(1, -1))
+      }
+
+      for (const item of registry) {
+        const { path: p, ApiClass, swagger } = item
+        const pathParams = parsePathParams(p)
+        const resolvedPath = p.startsWith('/') ? p : `/${p}`
+
+        if (!openapi.paths[resolvedPath]) openapi.paths[resolvedPath] = {}
+
+        for (const methodName of HTTP_METHODS) {
+          if (!definesMethod(ApiClass, methodName)) continue
+
+          const methodUpper = String(methodName).toUpperCase()
+          const methodLower = String(methodName).toLowerCase()
+
+          const params = pathParams.map((name) => ({
+            name,
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+          }))
+
+          openapi.paths[resolvedPath][methodLower] = {
+            tags: swagger?.tags?.length ? swagger.tags : [],
+            summary: swagger?.title ?? `${ApiClass.name}.${methodUpper}`,
+            description: swagger?.description ?? '',
+            deprecated: !!swagger?.deprecated,
+            operationId: `${ApiClass.name}_${methodLower}`,
+            parameters: params,
+            responses: { '200': { description: 'OK' } },
+          }
+        }
+      }
+
+      this.engine.route('GET', `${prefix}/openapi.json`, async () => openapi)
+      this.engine.route('GET', prefix, async () => ({
+        status: 200,
+        body: `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Fusion Swagger</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    <script>
+      window.onload = function() {
+        SwaggerUIBundle({ url: '${openapiUrl}', dom_id: '#swagger-ui' });
+      };
+    </script>
+  </body>
+</html>`,
+        headers: { 'content-type': 'text/html' },
+      }))
+    }
+
     this.mounted = true
   }
 

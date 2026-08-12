@@ -42,7 +42,16 @@ export class FusionApp {
   listen(host?: string, port?: number): Promise<void>
 }
 
-export function router(path: string): <T>(ApiClass: T) => T
+export function router(
+  path: string,
+  options?: {
+    tags?: string[]
+    desc?: string
+    title?: string
+    version?: string
+    deprecated?: boolean
+  }
+): <T>(ApiClass: T) => T
 export function apiResourceName(cls: { name: string } | string): string
 export function resolveRoutePath(path: string, cls: { name: string }): string
 export function configure(settings: Record<string, unknown>): FusionSettings

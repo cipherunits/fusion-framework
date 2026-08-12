@@ -4,87 +4,21 @@ use std::sync::Mutex;
 use bytes::Bytes;
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
-    api_resource_name, coerce_param, param_kind_from_name, resolve_route_path,
+    api_resource_name, coerce_param, param_kind_from_name,
     response_from_value, HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
-use pyo3::types::{
-    PyBool, PyDict, PyFloat, PyInt, PyList, PyModule, PyNone, PyString,
+use pyo3::types::{PyDict, PyModule, PyType};
+use serde_json::Value as JsonValue;
+
+mod api_types;
+mod json;
+
+use api_types::{
+    PyFusionBaseApi, clear_registry, mount_routes, register_route,
 };
-use serde_json::{Map, Number, Value as JsonValue};
-
-// ─── JSON bridge ────────────────────────────────────────────────────────────
-
-fn py_to_json(py: Python<'_>, value: &Bound<'_, PyAny>) -> PyResult<JsonValue> {
-    if value.is_instance_of::<PyNone>() {
-        return Ok(JsonValue::Null);
-    }
-    if value.is_instance_of::<PyBool>() {
-        return Ok(JsonValue::Bool(value.extract::<bool>()?));
-    }
-    if value.is_instance_of::<PyInt>() {
-        return Ok(JsonValue::Number(Number::from(value.extract::<i64>()?)));
-    }
-    if value.is_instance_of::<PyFloat>() {
-        let f = value.extract::<f64>()?;
-        return Ok(match Number::from_f64(f) {
-            Some(n) => JsonValue::Number(n),
-            None => JsonValue::Null,
-        });
-    }
-    if value.is_instance_of::<PyString>() {
-        return Ok(JsonValue::String(value.extract::<String>()?));
-    }
-    if let Ok(list) = value.downcast::<PyList>() {
-        let mut items = Vec::with_capacity(list.len());
-        for item in list.iter() {
-            items.push(py_to_json(py, &item)?);
-        }
-        return Ok(JsonValue::Array(items));
-    }
-    if let Ok(dict) = value.downcast::<PyDict>() {
-        let mut map = Map::new();
-        for (key, val) in dict.iter() {
-            map.insert(key.extract()?, py_to_json(py, &val)?);
-        }
-        return Ok(JsonValue::Object(map));
-    }
-    Ok(JsonValue::String(value.str()?.to_string()))
-}
-
-fn json_to_py(py: Python<'_>, value: &JsonValue) -> PyResult<PyObject> {
-    Ok(match value {
-        JsonValue::Null => py.None(),
-        JsonValue::Bool(b) => PyBool::new(py, *b).as_any().clone().unbind(),
-        JsonValue::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                i.into_pyobject(py)?.into_any().unbind()
-            } else if let Some(u) = n.as_u64() {
-                u.into_pyobject(py)?.into_any().unbind()
-            } else if let Some(f) = n.as_f64() {
-                f.into_pyobject(py)?.into_any().unbind()
-            } else {
-                py.None()
-            }
-        }
-        JsonValue::String(s) => s.into_pyobject(py)?.into_any().unbind(),
-        JsonValue::Array(items) => {
-            let list = PyList::empty(py);
-            for item in items {
-                list.append(json_to_py(py, item)?)?;
-            }
-            list.into_any().unbind()
-        }
-        JsonValue::Object(map) => {
-            let dict = PyDict::new(py);
-            for (k, v) in map {
-                dict.set_item(k, json_to_py(py, v)?)?;
-            }
-            dict.into_any().unbind()
-        }
-    })
-}
+use json::{json_to_py, py_to_json};
 
 // ─── Settings (core) ─────────────────────────────────────────────────────────
 
@@ -354,7 +288,16 @@ async fn invoke_handler_async(callback: PyObject, req: Request) -> PyResult<Resp
             let result = tokio::task::spawn_blocking(move || {
                 Python::with_gil(|py| -> PyResult<PyObject> {
                     let fut = concurrent.bind(py);
-                    Ok(fut.call_method0("result")?.unbind())
+                    match fut.call_method0("result") {
+                        Ok(v) => Ok(v.unbind()),
+                        Err(err) => {
+                            if let Some(resp) = api_types::is_http_exception(py, &err.value(py)) {
+                                Ok(resp.into_any())
+                            } else {
+                                Err(err)
+                            }
+                        }
+                    }
                 })
             })
             .await
@@ -380,13 +323,17 @@ impl PyApp {
         }
     }
 
-    fn route(&self, method: &str, path: &str, handler: PyObject) -> PyResult<()> {
+    fn route(&self, method: String, path: String, handler: PyObject) -> PyResult<()> {
         let mut app = self
             .inner
             .lock()
             .map_err(|_| PyRuntimeError::new_err("app lock poisoned"))?;
-        app.route(method, path, PyHandler { callback: handler });
+        app.route(&method, &path, PyHandler { callback: handler });
         Ok(())
+    }
+
+    fn mount_routes(&self) -> PyResult<()> {
+        mount_routes(self)
     }
 
     fn listen(&self, py: Python<'_>, host: &str, port: u16) -> PyResult<()> {
@@ -451,7 +398,43 @@ fn py_api_resource_name(class_name: &str) -> String {
 
 #[pyfunction(name = "resolve_route_path")]
 fn py_resolve_route_path(template: &str, class_name: &str) -> String {
-    resolve_route_path(template, class_name)
+    fusion_core::resolve_route_path(template, class_name)
+}
+
+#[pyfunction(name = "register_route")]
+#[pyo3(signature = (template, api_cls, tags=Vec::new(), desc=None, title=None, version=None, deprecated=false))]
+fn py_register_route(
+    template: &str,
+    api_cls: Bound<'_, PyType>,
+    tags: Vec<String>,
+    desc: Option<String>,
+    title: Option<String>,
+    version: Option<String>,
+    deprecated: bool,
+) -> PyResult<String> {
+    register_route(template, api_cls, tags, desc, title, version, deprecated)
+}
+
+#[pyfunction(name = "openapi_spec")]
+fn py_openapi_spec(py: Python<'_>) -> PyResult<PyObject> {
+    let spec = api_types::openapi_spec();
+    json_to_py(py, &spec)
+}
+
+#[pyfunction]
+fn clear_routes() {
+    clear_registry();
+}
+
+// Host-language HTTPException response building.
+#[pyfunction]
+fn http_error_to_response(
+    py: Python<'_>,
+    status: u16,
+    detail: Option<PyObject>,
+    headers: Option<Bound<'_, PyDict>>,
+) -> PyResult<Py<PyDict>> {
+    api_types::http_error_to_response(py, status, detail, headers)
 }
 
 #[pyfunction(name = "coerce_param")]
@@ -465,9 +448,14 @@ fn py_coerce_param(py: Python<'_>, raw: &str, kind: &str) -> PyResult<PyObject> 
 fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
     m.add_class::<PySettings>()?;
+    m.add_class::<PyFusionBaseApi>()?;
     m.add_function(wrap_pyfunction!(py_api_resource_name, m)?)?;
     m.add_function(wrap_pyfunction!(py_resolve_route_path, m)?)?;
     m.add_function(wrap_pyfunction!(py_coerce_param, m)?)?;
+    m.add_function(wrap_pyfunction!(py_register_route, m)?)?;
+    m.add_function(wrap_pyfunction!(clear_routes, m)?)?;
+    m.add_function(wrap_pyfunction!(http_error_to_response, m)?)?;
+    m.add_function(wrap_pyfunction!(py_openapi_spec, m)?)?;
     m.add("HTTP_METHODS", HTTP_METHODS)?;
     add_status_module(m)?;
 
