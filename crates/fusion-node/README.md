@@ -78,11 +78,24 @@ new FusionApp().listen()
       "path": "/swagger",
       "title": "Fusion API Docs",
       "info": { "title": "Fusion API", "version": "1.0.0", "description": "..." },
+      "servers": [{ "url": "/", "description": "Current host" }],
+      "auth": {
+        "persistAuthorization": true,
+        "schemes": {
+          "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+        },
+        "global": [],
+        "oauth": { "clientId": "", "appName": "Fusion API", "usePkceWithAuthorizationCodeGrant": true }
+      },
+      "navbar": { "enabled": true, "showUrlInput": true },
       "ui": { "docExpansion": "list", "filter": true, "tryItOutEnabled": true }
     }
   }
 }
 ```
 
-`swagger.ui` مستقیماً به گزینه‌های Swagger UI Bundle پاس داده می‌شود.
+- `auth.schemes` / `auth.global` → OpenAPI security
+- `auth.oauth` → `ui.initOAuth(...)`
+- `navbar.enabled` → Topbar / StandaloneLayout
+- `ui.*` → گزینه‌های Swagger UI Bundle
 

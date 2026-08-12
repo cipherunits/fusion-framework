@@ -37,8 +37,6 @@ if __name__ == "__main__":
 {
   "env": "dev",
   "config": {
-    "host": "127.0.0.1",
-    "port": 8080,
     "swagger": {
       "enabled": true,
       "path": "/swagger",
@@ -46,14 +44,34 @@ if __name__ == "__main__":
       "info": {
         "title": "Fusion API",
         "version": "1.0.0",
-        "description": "My API docs"
+        "description": "My API docs",
+        "contact": { "name": "API Support", "email": "support@example.com" },
+        "license": { "name": "MIT" }
+      },
+      "servers": [{ "url": "/", "description": "Current host" }],
+      "auth": {
+        "persistAuthorization": true,
+        "schemes": {
+          "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+          "ApiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-API-Key" }
+        },
+        "global": [],
+        "oauth": {
+          "clientId": "",
+          "appName": "Fusion API",
+          "scopes": "",
+          "usePkceWithAuthorizationCodeGrant": true
+        }
+      },
+      "navbar": {
+        "enabled": true,
+        "showUrlInput": true
       },
       "ui": {
         "deepLinking": true,
         "docExpansion": "list",
         "filter": true,
         "tryItOutEnabled": true,
-        "persistAuthorization": false,
         "displayRequestDuration": true
       }
     }
@@ -61,9 +79,23 @@ if __name__ == "__main__":
 }
 ```
 
-- `enabled` / `path`: روشن/خاموش و آدرس UI (پیش‌فرض `/swagger`)
-- `info`: فیلدهای OpenAPI `info` (title/version/description/...)
-- `ui`: گزینه‌های [Swagger UI](https://swagger.io/docs/open-source-tools/swagger-ui/usage/configuration/)
+### معنی کلیدها
+
+| کلید | کار |
+|------|-----|
+| `enabled` | روشن/خاموش کردن کل Swagger |
+| `path` | آدرس UI (پیش‌فرض `/swagger`) |
+| `title` | عنوان تب مرورگر |
+| `info` | متادیتای OpenAPI (`title`/`version`/`description`/`contact`/`license`) |
+| `servers` | لیست سرورها در OpenAPI (Try it out روی کدام host بزند) |
+| `auth.schemes` | تعریف روش‌های احراز هویت در OpenAPI (Bearer / API Key / OAuth2 / ...) |
+| `auth.global` | اگر پر باشد، همه‌ی endpointها به‌صورت پیش‌فرض آن security را می‌گیرند |
+| `auth.persistAuthorization` | توکن Authorize را بعد از رفرش صفحه نگه می‌دارد |
+| `auth.oauth` | تنظیمات `initOAuth` برای جریان OAuth2 در UI |
+| `navbar.enabled` | نوار بالای Swagger (Topbar) را نشان بده/پنهان کن |
+| `navbar.showUrlInput` | اینپوت آدرس spec داخل navbar |
+| `navbar.urls` | چند spec برای سوئیچ از navbar: `[{ "url": "...", "name": "..." }]` |
+| `ui.*` | بقیه‌ی گزینه‌های [Swagger UI](https://swagger.io/docs/open-source-tools/swagger-ui/usage/configuration/) |
 
 متادیتای هر endpoint همچنان از `@route(..., tags=..., desc=..., title=..., deprecated=...)` می‌آید.
 

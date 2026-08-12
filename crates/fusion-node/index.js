@@ -95,7 +95,7 @@ function router(routePath, options = {}) {
 
     const v = (options.version ?? '').toString().trim()
     const resolved =
-      v.length > 0 ? `${v}/${resolvedBase.replace(/^\\/+/, '')}` : resolvedBase
+      v.length > 0 ? `${v}/${resolvedBase.replace(/^\/+/, '')}` : resolvedBase
 
     ApiClass.__fusion_path__ = resolved
     ApiClass.__fusion_path_template__ = routePath
@@ -165,9 +165,23 @@ function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
 }
 
+function asList(value) {
+  return Array.isArray(value) ? value : []
+}
+
+function truthyEnabled(value, defaultValue = true) {
+  if (value === undefined || value === null) return defaultValue
+  if (value === false || value === 0 || value === 'false' || value === '0' || value === 'off' || value === 'no') {
+    return false
+  }
+  if (value === true || value === 1 || value === 'true' || value === '1' || value === 'on' || value === 'yes') {
+    return true
+  }
+  return Boolean(value)
+}
+
 function readSwaggerSettings() {
-  const enabled = settings.get('swagger.enabled', true)
-  if (enabled === false || enabled === 0 || enabled === 'false' || enabled === '0' || enabled === 'off') {
+  if (!truthyEnabled(settings.get('swagger.enabled', true))) {
     return { enabled: false }
   }
 
@@ -180,7 +194,7 @@ function readSwaggerSettings() {
   if (!prefix.startsWith('/')) prefix = `/${prefix}`
 
   const info = asObject(settings.get('swagger.info', {}))
-  for (const key of ['title', 'version', 'description']) {
+  for (const key of ['title', 'version', 'description', 'termsOfService', 'contact', 'license']) {
     const flat = settings.get(`swagger.${key}`, undefined)
     if (flat !== undefined && flat !== null && info[key] === undefined) info[key] = flat
   }
@@ -188,41 +202,140 @@ function readSwaggerSettings() {
   if (!info.version) info.version = '1.0.0'
 
   const pageTitle = settings.get('swagger.title', null) || info.title || 'Fusion API Docs'
+
+  const authRaw = asObject(settings.get('swagger.auth', {}))
+  const schemes = asObject(authRaw.schemes)
+  const oauth = asObject(authRaw.oauth)
+  const globalSecurity = asList(authRaw.global)
+  let persistAuth = authRaw.persistAuthorization
+  if (persistAuth === undefined) persistAuth = false
+
+  const navbarRaw = asObject(settings.get('swagger.navbar', {}))
+  const navbar = {
+    enabled: truthyEnabled(navbarRaw.enabled, true),
+    showUrlInput: truthyEnabled(navbarRaw.showUrlInput, true),
+    urls: Array.isArray(navbarRaw.urls) ? navbarRaw.urls : null,
+  }
+
   const ui = {
     deepLinking: true,
     displayOperationId: false,
     defaultModelsExpandDepth: 1,
+    defaultModelExpandDepth: 1,
+    defaultModelRendering: 'example',
     docExpansion: 'list',
     filter: true,
     tryItOutEnabled: true,
-    persistAuthorization: false,
+    persistAuthorization: Boolean(persistAuth),
     displayRequestDuration: true,
+    showExtensions: false,
+    showCommonExtensions: false,
+    syntaxHighlight: { activated: true, theme: 'agate' },
+    withCredentials: false,
+    validatorUrl: 'https://validator.swagger.io/validator',
     ...asObject(settings.get('swagger.ui', {})),
   }
+  if (Object.prototype.hasOwnProperty.call(authRaw, 'persistAuthorization')) {
+    ui.persistAuthorization = Boolean(persistAuth)
+  }
 
-  return { enabled: true, path: prefix, pageTitle: String(pageTitle), info, ui }
+  let servers = settings.get('swagger.servers', null)
+  if (!Array.isArray(servers)) servers = []
+
+  return {
+    enabled: true,
+    path: prefix,
+    pageTitle: String(pageTitle),
+    info,
+    servers,
+    auth: {
+      schemes,
+      global: globalSecurity,
+      oauth,
+      persistAuthorization: Boolean(persistAuth),
+    },
+    navbar,
+    ui,
+  }
+}
+
+function applySwaggerOpenApi(openapi, swagger) {
+  openapi.info = { ...asObject(openapi.info), ...swagger.info }
+  if (swagger.servers?.length) openapi.servers = swagger.servers
+  if (swagger.auth?.schemes && Object.keys(swagger.auth.schemes).length) {
+    openapi.components = asObject(openapi.components)
+    openapi.components.securitySchemes = {
+      ...asObject(openapi.components.securitySchemes),
+      ...swagger.auth.schemes,
+    }
+  }
+  if (swagger.auth?.global?.length) openapi.security = swagger.auth.global
+  return openapi
 }
 
 function swaggerUiHtml(swagger, openapiUrl) {
-  const uiOpts = { ...swagger.ui, url: openapiUrl, dom_id: '#swagger-ui' }
+  const uiOpts = { ...swagger.ui }
+  delete uiOpts.presets
+  delete uiOpts.plugins
+  delete uiOpts.layout
+
+  if (swagger.navbar?.urls?.length) {
+    delete uiOpts.url
+    uiOpts.urls = swagger.navbar.urls
+  } else {
+    uiOpts.url = openapiUrl
+    delete uiOpts.urls
+  }
+  uiOpts.dom_id = '#swagger-ui'
+
   const uiJson = JSON.stringify(uiOpts).replace(/</g, '\\u003c')
+  const oauth = swagger.auth?.oauth && Object.keys(swagger.auth.oauth).length ? swagger.auth.oauth : null
+  const oauthJson = JSON.stringify(oauth).replace(/</g, '\\u003c')
   const title = String(swagger.pageTitle)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+
+  const navbarEnabled = !!swagger.navbar?.enabled
+  const showUrlInput = swagger.navbar?.showUrlInput !== false
+  const hideUrlCss =
+    navbarEnabled && !showUrlInput
+      ? `<style>.topbar .download-url-wrapper { display: none !important; }</style>`
+      : ''
+  const standaloneScript = navbarEnabled
+    ? `<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>`
+    : ''
+
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title}</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+    ${hideUrlCss}
   </head>
   <body>
     <div id="swagger-ui"></div>
     <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    ${standaloneScript}
     <script>
       window.onload = function() {
-        SwaggerUIBundle(${uiJson});
+        var opts = ${uiJson};
+        opts.presets = [SwaggerUIBundle.presets.apis];
+        opts.plugins = [SwaggerUIBundle.plugins.DownloadUrl];
+        if (${navbarEnabled ? 'true' : 'false'} && typeof SwaggerUIStandalonePreset !== 'undefined') {
+          opts.presets.push(SwaggerUIStandalonePreset);
+          opts.layout = 'StandaloneLayout';
+        } else {
+          opts.layout = 'BaseLayout';
+        }
+        var ui = SwaggerUIBundle(opts);
+        var oauth = ${oauthJson};
+        if (oauth && typeof ui.initOAuth === 'function') {
+          ui.initOAuth(oauth);
+        }
+        window.ui = ui;
       };
     </script>
   </body>
@@ -260,11 +373,14 @@ class FusionApp {
     if (swagger.enabled) {
       const prefix = swagger.path
 
-      const openapi = {
-        openapi: '3.0.3',
-        info: { ...swagger.info },
-        paths: {},
-      }
+      const openapi = applySwaggerOpenApi(
+        {
+          openapi: '3.0.3',
+          info: { ...swagger.info },
+          paths: {},
+        },
+        swagger,
+      )
 
       const parsePathParams = (pattern) => {
         return String(pattern)

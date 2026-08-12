@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "fusion-bench"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "fusion-core"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "bytes",
  "console",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "fusion-node"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "fusion-core",
  "napi",
@@ -442,7 +442,7 @@ dependencies = [
 
 [[package]]
 name = "fusion-py"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "bytes",
  "fusion-core",
