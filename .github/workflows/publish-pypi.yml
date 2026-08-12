@@ -35,7 +35,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: |
+          # Accept v1.2.3 or accidental v.1.2.3
           TAG="${GITHUB_REF_NAME#v}"
+          TAG="${TAG#.}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version tag after strip: '$TAG' (from $GITHUB_REF_NAME)" >&2
+            exit 1
+          fi
           sed -i "s/^version = \".*\"/version = \"${TAG}\"/" crates/fusion-py/pyproject.toml
           sed -i "s/^version.workspace = true/version = \"${TAG}\"/" crates/fusion-py/Cargo.toml || true
       # abi3-py39 → one wheel per platform; avoid -i which breaks inside manylinux docker
@@ -64,6 +70,11 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME#v}"
+          TAG="${TAG#.}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version tag after strip: '$TAG' (from $GITHUB_REF_NAME)" >&2
+            exit 1
+          fi
           sed -i "s/^version = \".*\"/version = \"${TAG}\"/" crates/fusion-py/pyproject.toml
       - uses: PyO3/maturin-action@v1
         with:
@@ -96,7 +107,14 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME#v}"
+          TAG="${TAG#.}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version tag after strip: '$TAG' (from $GITHUB_REF_NAME)" >&2
+            exit 1
+          fi
+          # macOS/BSD sed needs a backup suffix
           sed -i.bak "s/^version = \".*\"/version = \"${TAG}\"/" crates/fusion-py/pyproject.toml
+          rm -f crates/fusion-py/pyproject.toml.bak
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
@@ -118,6 +136,11 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME#v}"
+          TAG="${TAG#.}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version tag after strip: '$TAG' (from $GITHUB_REF_NAME)" >&2
+            exit 1
+          fi
           sed -i "s/^version = \".*\"/version = \"${TAG}\"/" crates/fusion-py/pyproject.toml
       - uses: PyO3/maturin-action@v1
         with:

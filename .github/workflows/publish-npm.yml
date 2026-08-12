@@ -121,6 +121,11 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME#v}"
+          TAG="${TAG#.}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version tag after strip: '$TAG' (from $GITHUB_REF_NAME)" >&2
+            exit 1
+          fi
           npm version "$TAG" --no-git-tag-version --allow-same-version
 
       # Do NOT set NODE_AUTH_TOKEN — that forces the legacy token path.
