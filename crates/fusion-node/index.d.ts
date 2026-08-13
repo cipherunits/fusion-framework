@@ -25,6 +25,7 @@ export class FusionBaseApi {
   readonly headers: Record<string, string>
   readonly params: Record<string, string>
   readonly query: Record<string, string>
+  readonly state: Record<string, unknown>
   response(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
 }
 
@@ -38,6 +39,7 @@ export class HTTPException extends Error {
 
 export class FusionApp {
   constructor(settings?: Partial<FusionSettings>)
+  use(middleware: FusionMiddleware): void
   mount(): void
   listen(host?: string, port?: number): Promise<void>
 }
@@ -50,8 +52,17 @@ export function router(
     title?: string
     version?: string
     deprecated?: boolean
+    middleware?: FusionMiddleware[]
+    roles?: string[]
   }
 ): <T>(ApiClass: T) => T
+export function bearerJwt(options?: { stateKey?: string; header?: string }): FusionMiddleware
+export function requireRoles(...roles: string[]): FusionMiddleware
+export function runMiddlewareChain(
+  request: FusionRequest,
+  middlewares: FusionMiddleware[],
+  handler: (request: FusionRequest) => unknown | Promise<unknown>,
+): Promise<unknown>
 export function apiResourceName(cls: { name: string } | string): string
 export function resolveRoutePath(path: string, cls: { name: string }): string
 export function configure(settings: Record<string, unknown>): FusionSettings
@@ -79,7 +90,13 @@ export interface FusionRequest {
   headers: Record<string, string>
   params: Record<string, string>
   query: Record<string, string>
+  state?: Record<string, unknown>
 }
+
+export type FusionMiddleware = (
+  request: FusionRequest,
+  callNext: (request: FusionRequest) => unknown | Promise<unknown>,
+) => unknown | Promise<unknown>
 
 export type FusionResponse =
   | string

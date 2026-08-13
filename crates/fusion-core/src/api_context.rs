@@ -16,6 +16,7 @@ pub struct ApiContext {
     pub headers: HashMap<String, String>,
     pub params: HashMap<String, String>,
     pub query: HashMap<String, String>,
+    pub state: HashMap<String, Value>,
 }
 
 impl ApiContext {
@@ -27,6 +28,7 @@ impl ApiContext {
             headers: req.headers.iter().cloned().collect(),
             params: req.params.clone(),
             query: req.query.clone(),
+            state: req.state.clone(),
         }
     }
 

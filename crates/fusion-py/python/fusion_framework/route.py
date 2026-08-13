@@ -1,8 +1,8 @@
-"""Thin route registration — all dispatch logic lives in Rust."""
+"""Thin route registration — dispatch and middleware orchestration live in Rust/Python."""
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Type
+from typing import Callable, Optional, Sequence, Type
 
 from fusion_framework._fusion import (
     HTTP_METHODS,
@@ -12,6 +12,7 @@ from fusion_framework._fusion import (
     resolve_route_path,
 )
 from fusion_framework.api import FusionBaseApi
+from fusion_framework.middleware import require_roles
 
 __all__ = [
     "HTTP_METHODS",
@@ -31,10 +32,20 @@ def route(
     title: Optional[str] = None,
     version: Optional[str] = None,
     deprecated: bool = False,
+    middleware: Optional[Sequence] = None,
+    roles: Optional[Sequence[str]] = None,
 ) -> Callable[[Type[FusionBaseApi]], Type[FusionBaseApi]]:
-    """Register a ``FusionBaseApi`` subclass with Swagger/OpenAPI metadata."""
+    """Register a ``FusionBaseApi`` subclass.
+
+    ``middleware`` — callables ``(request, call_next) -> response | call_next(...)``.
+    ``roles`` — shorthand that appends a ``require_roles(...)`` route middleware.
+    """
 
     def decorator(cls: Type[FusionBaseApi]) -> Type[FusionBaseApi]:
+        route_middleware = list(middleware or [])
+        if roles:
+            route_middleware.append(require_roles(*roles))
+
         register_route(
             path,
             cls,
@@ -43,6 +54,7 @@ def route(
             title,
             version,
             deprecated,
+            route_middleware,
         )
         return cls
 
@@ -50,7 +62,7 @@ def route(
 
 
 def router(path: str) -> Callable[[Type[FusionBaseApi]], Type[FusionBaseApi]]:
-    """Backward-compatible alias of `route(path)` with no Swagger metadata."""
+    """Backward-compatible alias of ``route(path)`` with no Swagger metadata."""
     return route(path)
 
 

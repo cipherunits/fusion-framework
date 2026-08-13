@@ -5,9 +5,9 @@ use fusion_core::{
     HttpError, ParamKind, ParamSpec, Request, bind_args, build_response, resolve_route_path,
     HTTP_METHODS,
 };
-use pyo3::exceptions::{PyRuntimeError, PyTypeError};
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyString, PyType};
+use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyType};
 use pyo3::PyObject;
 use serde_json::Value as JsonValue;
 
@@ -145,6 +145,17 @@ impl PyFusionBaseApi {
         }
     }
 
+    #[getter]
+    fn state(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
+        let req = self.request.bind(py);
+        match req.get_item("state")? {
+            Some(dict) if dict.is_instance_of::<PyDict>() => {
+                Ok(dict.downcast::<PyDict>()?.clone().unbind())
+            }
+            _ => Ok(PyDict::new(py).unbind()),
+        }
+    }
+
     #[pyo3(signature = (body=None, status=200, **headers))]
     fn response(
         &self,
@@ -227,6 +238,7 @@ struct RegisteredRoute {
     api_cls: Py<PyType>,
     method_specs: HashMap<String, Vec<ParamSpec>>,
     swagger: SwaggerMeta,
+    middleware: Vec<Py<PyAny>>,
 }
 
 static REGISTRY: Mutex<Vec<RegisteredRoute>> = Mutex::new(Vec::new());
@@ -245,6 +257,7 @@ pub fn register_route(
     title: Option<String>,
     version: Option<String>,
     deprecated: bool,
+    middleware: Vec<Py<PyAny>>,
 ) -> PyResult<String> {
     let py = api_cls.py();
 
@@ -288,29 +301,32 @@ pub fn register_route(
                 title,
                 deprecated,
             },
+            middleware,
         });
 
     Ok(resolved)
 }
 
 pub fn mount_routes(app: &super::PyApp) -> PyResult<()> {
-    let routes: Vec<(String, Py<PyType>, HashMap<String, Vec<ParamSpec>>)> = Python::with_gil(|py| {
-        let guard = REGISTRY
-            .lock()
-            .map_err(|_| PyRuntimeError::new_err("registry lock poisoned"))?;
-        Ok::<_, PyErr>(guard
-            .iter()
-            .map(|r| {
-                (
-                    r.path.clone(),
-                    r.api_cls.clone_ref(py),
-                    r.method_specs.clone(),
-                )
-            })
-            .collect())
-    })?;
+    let routes: Vec<(String, Py<PyType>, HashMap<String, Vec<ParamSpec>>, Vec<Py<PyAny>>)> =
+        Python::with_gil(|py| {
+            let guard = REGISTRY
+                .lock()
+                .map_err(|_| PyRuntimeError::new_err("registry lock poisoned"))?;
+            Ok::<_, PyErr>(guard
+                .iter()
+                .map(|r| {
+                    (
+                        r.path.clone(),
+                        r.api_cls.clone_ref(py),
+                        r.method_specs.clone(),
+                        r.middleware.iter().map(|m| m.clone_ref(py)).collect(),
+                    )
+                })
+                .collect())
+        })?;
 
-    for (path, api_cls, method_specs) in routes {
+    for (path, api_cls, method_specs, middleware) in routes {
         for method_name in HTTP_METHODS {
             let Some(specs) = method_specs.get(*method_name) else {
                 continue;
@@ -320,6 +336,7 @@ pub fn mount_routes(app: &super::PyApp) -> PyResult<()> {
                     api_cls: api_cls.clone_ref(py),
                     method_name: (*method_name).to_string(),
                     specs: specs.clone(),
+                    middleware: middleware.iter().map(|m| m.clone_ref(py)).collect(),
                 };
                 Ok(Py::new(py, route_handler)?.into_any().into())
             })?;
@@ -331,17 +348,48 @@ pub fn mount_routes(app: &super::PyApp) -> PyResult<()> {
 }
 
 #[pyclass]
-struct RouteHandler {
+struct HandlerInvoker {
     api_cls: Py<PyType>,
     method_name: String,
     specs: Vec<ParamSpec>,
 }
 
 #[pymethods]
-impl RouteHandler {
+impl HandlerInvoker {
     #[pyo3(name = "__call__")]
     fn call(&self, py: Python<'_>, request: Py<PyDict>) -> PyResult<PyObject> {
         invoke_api_method(py, &self.api_cls, &self.method_name, &self.specs, request)
+    }
+}
+
+#[pyclass]
+struct RouteHandler {
+    api_cls: Py<PyType>,
+    method_name: String,
+    specs: Vec<ParamSpec>,
+    middleware: Vec<Py<PyAny>>,
+}
+
+#[pymethods]
+impl RouteHandler {
+    #[pyo3(name = "__call__")]
+    fn call(&self, py: Python<'_>, request: Py<PyDict>) -> PyResult<PyObject> {
+        let middleware = PyList::new(
+            py,
+            self.middleware.iter().map(|m| m.bind(py)),
+        )?;
+        let invoker = Py::new(
+            py,
+            HandlerInvoker {
+                api_cls: self.api_cls.clone_ref(py),
+                method_name: self.method_name.clone(),
+                specs: self.specs.clone(),
+            },
+        )?;
+        let middleware_mod = py.import("fusion_framework.middleware")?;
+        Ok(middleware_mod
+            .call_method1("dispatch_route", (request, invoker, middleware))?
+            .unbind())
     }
 }
 
@@ -427,6 +475,15 @@ fn build_core_request(py: Python<'_>, request: &Py<PyDict>) -> PyResult<Request>
         }
     }
 
+    let mut state = HashMap::new();
+    if let Some(s) = dict.get_item("state")? {
+        if let Ok(map) = s.downcast::<PyDict>() {
+            for (k, v) in map.iter() {
+                state.insert(k.extract()?, py_to_json(py, &v)?);
+            }
+        }
+    }
+
     Ok(Request {
         method,
         path,
@@ -434,6 +491,7 @@ fn build_core_request(py: Python<'_>, request: &Py<PyDict>) -> PyResult<Request>
         body: body.into_bytes().into(),
         params,
         query,
+        state,
     })
 }
 

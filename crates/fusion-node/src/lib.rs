@@ -319,6 +319,8 @@ fn make_tsfn(
         }
         obj.set_named_property("query", query_obj)?;
 
+        obj.set_named_property("state", ctx.env.create_object()?)?;
+
         Ok(vec![obj])
     })
 }

@@ -6,6 +6,7 @@ from typing import Any
 from fusion_framework._fusion import App
 from fusion_framework.config import get_settings, load_settings_module, settings as settings_store
 from fusion_framework._fusion import openapi_spec as _openapi_spec
+from fusion_framework.middleware import set_active_global
 
 
 def _as_dict(value: Any) -> dict:
@@ -229,9 +230,15 @@ class FusionApp:
         self.settings = app_settings or get_settings()
         self._engine = App()
         self._mounted = False
+        self._middleware: list = []
+
+    def use(self, middleware) -> None:
+        """Register global middleware: ``(request, call_next) -> response``."""
+        self._middleware.append(middleware)
 
     def listen(self, host: str | None = None, port: int | None = None) -> None:
         if not self._mounted:
+            set_active_global(self._middleware)
             self._engine.mount_routes()
             swagger = _swagger_settings(self.settings)
             if swagger.get("enabled"):
@@ -258,9 +265,13 @@ class FusionApp:
             print("fusion: stopped", flush=True)
 
 
-def run(settings_module: str | None = "settings") -> None:
+def run(settings_module: str | None = "settings", middleware: list | None = None) -> None:
+    """Start the app. For middleware, prefer explicit ``FusionApp`` in ``main.py``."""
     if settings_module:
         load_settings_module(settings_module)
     else:
         settings_store.load_json()
-    FusionApp(get_settings()).listen()
+    app = FusionApp(get_settings())
+    for mw in middleware or []:
+        app.use(mw)
+    app.listen()

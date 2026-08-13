@@ -1,6 +1,8 @@
 use bytes::Bytes;
 use std::collections::HashMap;
 
+use serde_json::Value;
+
 #[derive(Debug, Clone)]
 pub struct Request {
     pub method: String,
@@ -9,6 +11,8 @@ pub struct Request {
     pub body: Bytes,
     pub params: HashMap<String, String>,
     pub query: HashMap<String, String>,
+    /// Arbitrary per-request data populated by middleware (JWT payload, user id, …).
+    pub state: HashMap<String, Value>,
 }
 
 impl Request {
@@ -25,6 +29,7 @@ impl Request {
             body,
             params: HashMap::new(),
             query: HashMap::new(),
+            state: HashMap::new(),
         }
     }
 
@@ -35,6 +40,11 @@ impl Request {
 
     pub fn with_query(mut self, query: HashMap<String, String>) -> Self {
         self.query = query;
+        self
+    }
+
+    pub fn with_state(mut self, state: HashMap<String, Value>) -> Self {
+        self.state = state;
         self
     }
 

@@ -234,6 +234,12 @@ fn invoke_handler_start(py: Python<'_>, callback: &PyObject, req: Request) -> Py
     }
     py_req.set_item("query", query)?;
 
+    let state = PyDict::new(py);
+    for (name, value) in req.state {
+        state.set_item(name, json_to_py(py, &value)?)?;
+    }
+    py_req.set_item("state", state)?;
+
     let result = callback.call1(py, (py_req,))?;
     let bound = result.bind(py);
 
@@ -402,7 +408,7 @@ fn py_resolve_route_path(template: &str, class_name: &str) -> String {
 }
 
 #[pyfunction(name = "register_route")]
-#[pyo3(signature = (template, api_cls, tags=Vec::new(), desc=None, title=None, version=None, deprecated=false))]
+#[pyo3(signature = (template, api_cls, tags=Vec::new(), desc=None, title=None, version=None, deprecated=false, middleware=Vec::new()))]
 fn py_register_route(
     template: &str,
     api_cls: Bound<'_, PyType>,
@@ -411,8 +417,23 @@ fn py_register_route(
     title: Option<String>,
     version: Option<String>,
     deprecated: bool,
+    middleware: Vec<PyObject>,
 ) -> PyResult<String> {
-    register_route(template, api_cls, tags, desc, title, version, deprecated)
+    let py = api_cls.py();
+    let middleware: Vec<Py<PyAny>> = middleware
+        .into_iter()
+        .map(|m| m.into_bound(py).into_any().unbind())
+        .collect();
+    register_route(
+        template,
+        api_cls,
+        tags,
+        desc,
+        title,
+        version,
+        deprecated,
+        middleware,
+    )
 }
 
 #[pyfunction(name = "openapi_spec")]

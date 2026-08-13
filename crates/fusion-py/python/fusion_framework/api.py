@@ -43,6 +43,10 @@ class FusionBaseApi:
     def query(self) -> Mapping[str, str]:
         return self.request.get("query") or {}
 
+    @property
+    def state(self) -> Mapping[str, Any]:
+        return self.request.get("state") or {}
+
     def response(self, body: Any = "", status: int = 200, **headers: str) -> dict[str, Any]:
         """Build an HTTP envelope: ``{\"status\": ..., \"body\": ...}``."""
         response: dict[str, Any] = {"status": status, "body": body}

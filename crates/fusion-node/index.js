@@ -71,6 +71,10 @@ class FusionBaseApi {
     return this.request.query || {}
   }
 
+  get state() {
+    return this.request.state || {}
+  }
+
   response(body = '', status = 200, headers = {}) {
     // Keep this helper thin: content-type inference lives in fusion-core.
     const out = { status, body }
@@ -89,6 +93,89 @@ function resolveRoutePath(routePath, ApiClass) {
   return native.resolveRoutePathJs(routePath, ApiClass.name)
 }
 
+const registry = []
+let activeGlobalMiddleware = []
+
+function ensureState(request) {
+  if (!request.state || typeof request.state !== 'object') {
+    request.state = {}
+  }
+  return request.state
+}
+
+function isResponse(value) {
+  return value && typeof value === 'object' && 'status' in value
+}
+
+async function runMiddlewareChain(request, middlewares, handler) {
+  ensureState(request)
+  let index = 0
+
+  async function dispatch(i, req) {
+    if (i >= middlewares.length) {
+      return await handler(req)
+    }
+    const middleware = middlewares[i]
+    const callNext = (nextReq) => dispatch(i + 1, nextReq)
+    let result = middleware(req, callNext)
+    if (result && typeof result.then === 'function') {
+      result = await result
+    }
+    if (isResponse(result)) return result
+    return result
+  }
+
+  return dispatch(0, request)
+}
+
+function requireRoles(...roles) {
+  const allowed = new Set(roles.map(String))
+  return (request, callNext) => {
+    const payload = ensureState(request).jwt
+    if (!payload) {
+      return { status: 401, body: { detail: 'Authentication required' } }
+    }
+    let userRoles = payload.roles
+    if (userRoles == null) {
+      return { status: 403, body: { detail: "Missing 'roles' claim" } }
+    }
+    if (typeof userRoles === 'string') userRoles = [userRoles]
+    if (!Array.isArray(userRoles)) {
+      return { status: 403, body: { detail: "Invalid 'roles' claim" } }
+    }
+    const hasRole = userRoles.some((r) => allowed.has(String(r)))
+    if (!hasRole) {
+      return { status: 403, body: { detail: 'Insufficient permissions', required: [...allowed] } }
+    }
+    return callNext(request)
+  }
+}
+
+function bearerJwt(options = {}) {
+  const stateKey = options.stateKey || 'jwt'
+  const headerName = options.header || 'Authorization'
+
+  return (request, callNext) => {
+    const headers = request.headers || {}
+    const auth =
+      headers[headerName] || headers[headerName.toLowerCase()] || headers[headerName.toUpperCase()]
+    if (!auth || !String(auth).toLowerCase().startsWith('bearer ')) {
+      return { status: 401, body: { detail: 'Missing bearer token' } }
+    }
+    const token = String(auth).slice(7).trim()
+    try {
+      const parts = token.split('.')
+      if (parts.length !== 3) throw new Error('bad token')
+      const payloadB64 = parts[1] + '='.repeat((4 - (parts[1].length % 4)) % 4)
+      const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'))
+      ensureState(request)[stateKey] = payload
+      return callNext(request)
+    } catch {
+      return { status: 401, body: { detail: 'Invalid token' } }
+    }
+  }
+}
+
 function router(routePath, options = {}) {
   return function decorate(ApiClass) {
     const resolvedBase = resolveRoutePath(routePath, ApiClass)
@@ -100,9 +187,15 @@ function router(routePath, options = {}) {
     ApiClass.__fusion_path__ = resolved
     ApiClass.__fusion_path_template__ = routePath
 
+    const routeMiddleware = Array.isArray(options.middleware) ? [...options.middleware] : []
+    if (Array.isArray(options.roles) && options.roles.length) {
+      routeMiddleware.push(requireRoles(...options.roles))
+    }
+
     registry.push({
       path: resolved,
       ApiClass,
+      middleware: routeMiddleware,
       swagger: {
         tags: Array.isArray(options.tags) ? options.tags : [],
         description: options.desc ?? null,
@@ -348,23 +441,33 @@ class FusionApp {
     this.settings = getSettings()
     this.engine = new NativeApp()
     this.mounted = false
+    this._middleware = []
+  }
+
+  use(middleware) {
+    this._middleware.push(middleware)
   }
 
   mount() {
     if (this.mounted) return
-    for (const { path: routePath, ApiClass } of registry) {
+    activeGlobalMiddleware = [...this._middleware]
+
+    for (const { path: routePath, ApiClass, middleware: routeMiddleware = [] } of registry) {
       for (const methodName of HTTP_METHODS) {
         if (!definesMethod(ApiClass, methodName)) continue
         this.engine.route(methodName.toUpperCase(), routePath, async (request) => {
-          try {
-            const instance = new ApiClass(request)
-            const fn = instance[methodName]
-            // No-arg handler contract: use `this.params`, `this.query`, `this.body`.
-            return await Promise.resolve(fn.call(instance))
-          } catch (err) {
-            if (err instanceof HTTPException) return err.toResponse()
-            throw err
+          const chain = [...activeGlobalMiddleware, ...routeMiddleware]
+          const handler = async (req) => {
+            try {
+              const instance = new ApiClass(req)
+              const fn = instance[methodName]
+              return await Promise.resolve(fn.call(instance))
+            } catch (err) {
+              if (err instanceof HTTPException) return err.toResponse()
+              throw err
+            }
           }
+          return runMiddlewareChain(request, chain, handler)
         })
       }
     }
@@ -477,4 +580,7 @@ module.exports = {
   settings,
   HTTP_METHODS,
   run,
+  bearerJwt,
+  requireRoles,
+  runMiddlewareChain,
 }
