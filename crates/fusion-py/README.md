@@ -55,4 +55,4 @@ Full guides (router, config, middleware, async):
 
 ## License
 
-MIT
+BSD 3-Clause

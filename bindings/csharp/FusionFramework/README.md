@@ -54,4 +54,4 @@ Route.Register(typeof(AdminModule), "/api/admin", roles: new[] { "admin" });
 
 ## License
 
-MIT
+BSD 3-Clause

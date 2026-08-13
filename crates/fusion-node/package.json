@@ -1,6 +1,6 @@
 {
   "name": "fusion-framework",
-  "version": "1.1.2",
+  "version": "1.2.4",
   "description": "Class-based HTTP framework for Node.js, powered by a shared Rust core via N-API",
   "keywords": [
     "http",
@@ -28,7 +28,7 @@
     "directory": "crates/fusion-node"
   },
   "author": "CipherUnits <cipherunit.dev@gmail.com>",
-  "license": "MIT",
+  "license": "BSD-3-Clause",
   "type": "commonjs",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -54,7 +54,9 @@
       "additional": [
         "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
-        "x86_64-pc-windows-msvc"
+        "x86_64-pc-windows-msvc",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin"
       ]
     }
   },
@@ -74,6 +76,7 @@
   },
   "os": [
     "linux",
+    "darwin",
     "win32"
   ],
   "devDependencies": {

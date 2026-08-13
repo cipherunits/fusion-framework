@@ -2,26 +2,24 @@
 
 Class-based HTTP APIs on a shared Rust core (`fusion-core`).
 
-Handlers use `this.params` / `this.query` / `this.body` / `this.state` (no signature param injection — that is Python-only DX).
-
-## Links
-
-- **Docs:** [fusion.cipherunit.xyz](https://fusion.cipherunit.xyz/)
-- **GitHub:** [cipherunits/fusion-framework](https://github.com/cipherunits/fusion-framework)
-- **CLI:** [cipherunits/fusion-tool](https://github.com/cipherunits/fusion-tool)
+Handlers use `this.params` / `this.query` / `this.body` / `this.state` (no signature param injection — that is Python-only).
 
 ## Install
 
 ```bash
-cd crates/fusion-node
-npm install
-npm run build:debug
+npm i fusion-framework
 ```
 
-Or after publish:
+From this repo:
 
 ```bash
-npm i fusion-framework
+cd crates/fusion-node && npm install && npm run build:debug
+```
+
+Scaffold with [Fusion Tool](https://github.com/cipherunits/fusion-tool):
+
+```bash
+fusion init --lang typescript --name my-app
 ```
 
 ## Quick start
@@ -37,7 +35,7 @@ export const ItemModule = route('/api/[module]/{id}')(
   },
 )
 
-const MIDDLEWARE = [] // optional — framework has no defaults
+const MIDDLEWARE = [] // optional — no defaults
 
 settings.ensureLoaded()
 const app = new FusionApp(getSettings())
@@ -45,32 +43,14 @@ for (const mw of MIDDLEWARE) app.use(mw)
 await app.listen()
 ```
 
-## Middleware
+## Docs
 
-```js
-import { bearerJwt, requireRoles, route } from 'fusion-framework'
+Full guides (router, config, middleware):  
+**https://fusion.cipherunit.xyz/en/docs/typescript/v1**
 
-const MIDDLEWARE = [bearerJwt()] // or bearerJwt({ verify })
-
-route('/api/admin', { roles: ['admin', 'super_admin'] })(
-  class AdminModule extends FusionBaseApi {
-    get() {
-      return this.response({ user: this.state.jwt?.sub })
-    }
-  },
-)
-```
-
-Sync or async: `(request, callNext) => …` / `async (request, callNext) => await callNext(request)`.
-
-## Status codes
-
-```js
-import { status } from 'fusion-framework'
-status.HTTP_SUCCESS // 200
-status.HTTP_404_NOT_FOUND
-```
+- Site: [fusion.cipherunit.xyz](https://fusion.cipherunit.xyz/)
+- GitHub: [cipherunits/fusion-framework](https://github.com/cipherunits/fusion-framework)
 
 ## License
 
-MIT
+BSD 3-Clause

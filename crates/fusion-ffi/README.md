@@ -1,26 +1,30 @@
 # fusion-ffi
 
-C ABI over [`fusion-core`](../fusion-core) for C# and other FFI consumers.
+Thin C ABI over [`fusion-core`](../fusion-core) for C# and other FFI consumers.
 
 ## Build
 
 ```bash
 cargo build -p fusion-ffi
-# → target/debug/libfusion_ffi.so (Linux) / fusion_ffi.dll / libfusion_ffi.dylib
+# → target/debug/libfusion_ffi.so | fusion_ffi.dll | libfusion_ffi.dylib
 ```
 
-## Surface
+Optional: `export FUSION_FFI_PATH=/path/to/libfusion_ffi.so`
 
-| Function | Role |
-|----------|------|
-| `fusion_app_new` / `free` | App lifecycle |
-| `fusion_app_route` | Register method+path+callback |
-| `fusion_app_listen` / `listen_from_settings` | Blocking HTTP server |
-| `fusion_settings_*` | Load `fusion.<env>.json`, get/merge |
-| `fusion_string_dup` / `free` | Cross-boundary UTF-8 strings |
-| `fusion_http_status_codes` | JSON map of status constants |
-| `fusion_resolve_route_path` | Expand `[module]` |
+## Usage
 
-Handler callbacks must return a string allocated with `fusion_string_dup`.
+Prefer the managed wrapper: [`bindings/csharp/FusionFramework`](../../bindings/csharp/FusionFramework).
 
-See `bindings/csharp/FusionFramework` for the managed wrapper.
+Low-level surface: `fusion_app_*`, `fusion_settings_*`, `fusion_string_dup` / `fusion_string_free`, route helpers. Handler callbacks must return strings allocated with `fusion_string_dup`.
+
+## Docs
+
+C# guides:  
+**https://fusion.cipherunit.xyz/en/docs/csharp/v1**
+
+- Site: [fusion.cipherunit.xyz](https://fusion.cipherunit.xyz/)
+- GitHub: [cipherunits/fusion-framework](https://github.com/cipherunits/fusion-framework)
+
+## License
+
+BSD 3-Clause

@@ -3,7 +3,7 @@ name = "fusion-ffi"
 version.workspace = true
 edition.workspace = true
 description = "C ABI for fusion-core (C# and other FFI consumers)"
-license = "MIT"
+license = "BSD-3-Clause"
 
 [lib]
 name = "fusion_ffi"

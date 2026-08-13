@@ -4,11 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "fusion-framework"
-version = "1.1.2"
+version = "1.2.4"
 description = "Class-based HTTP framework for Python, powered by a shared Rust core"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = { text = "BSD-3-Clause" }
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
