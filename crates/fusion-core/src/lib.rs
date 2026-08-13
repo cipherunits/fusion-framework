@@ -20,8 +20,10 @@ pub use dispatch::{ParamSpec, bind_args, build_response, parse_json_object, BODY
 pub use error::{Error, Result};
 pub use handler::{Handler, HandlerFuture, SyncHandler};
 pub use headers::{
-    attachment, cache_control, content_disposition_attachment, content_disposition_inline,
-    content_type, content_type_value, download, inline, location, HTTP_HEADER_CONSTANTS,
+    apply_fingerprint_headers, attachment, cache_control, content_disposition_attachment,
+    content_disposition_inline, content_type, content_type_value, download, fingerprint_headers,
+    framework_version, inline, location, FRAMEWORK_ID, FRAMEWORK_POWERED_BY, HTTP_HEADER_CONSTANTS,
+    X_FRAMEWORK, X_FUSION_VERSION, X_POWERED_BY,
 };
 pub use http_error::HttpError;
 pub use naming::{HTTP_METHODS, api_resource_name, resolve_route_path};
@@ -79,7 +81,20 @@ impl App {
     }
 
     pub async fn listen(self, addr: SocketAddr) -> Result<()> {
-        server::listen(self.router, addr).await
+        let fingerprint = self
+            .settings
+            .get_bool("fingerprint.enabled")
+            .unwrap_or(true);
+        if fingerprint {
+            server::listen(self.router, addr).await
+        } else {
+            server::listen_with(
+                self.router,
+                addr,
+                server::ListenOptions { fingerprint: false },
+            )
+            .await
+        }
     }
 
     pub async fn listen_host_port(self, host: &str, port: u16) -> Result<()> {

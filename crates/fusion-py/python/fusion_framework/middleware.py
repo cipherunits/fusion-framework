@@ -191,6 +191,46 @@ def bearer_jwt(
     return middleware
 
 
+def _merge_response_headers(result: Any, extra: dict[str, str]) -> Any:
+    if not isinstance(result, dict):
+        return {"status": 200, "body": result, "headers": dict(extra)}
+    headers = result.get("headers")
+    if not isinstance(headers, dict):
+        headers = {}
+    merged = {**extra, **headers}  # handler wins on conflict
+    out = dict(result)
+    out["headers"] = merged
+    return out
+
+
+def framework_headers() -> Middleware:
+    """Default identity middleware: advertise Fusion on every response.
+
+    Adds ``X-Powered-By``, ``X-Framework``, and ``X-Fusion-Version``.
+    The Rust core also injects these on the wire (covers 404s). Disable with
+    ``fingerprint.enabled: false`` in ``fusion.<env>.json``.
+    """
+    try:
+        from fusion_framework._fusion import fingerprint_headers as _fp
+
+        extra = dict(_fp())
+    except Exception:
+        from fusion_framework import header as hdr
+
+        extra = {
+            getattr(hdr, "X_POWERED_BY", "X-Powered-By"): getattr(
+                hdr, "FRAMEWORK_POWERED_BY", "Fusion Framework"
+            ),
+            getattr(hdr, "X_FRAMEWORK", "X-Framework"): getattr(hdr, "FRAMEWORK_ID", "Fusion"),
+            getattr(hdr, "X_FUSION_VERSION", "X-Fusion-Version"): "1.2.4",
+        }
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        return _merge_response_headers(call_next(request), extra)
+
+    return middleware
+
+
 def dispatch_route(
     request: RequestDict,
     handler: Callable[[RequestDict], Any],

@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.2.4.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.2.4+2269b6a1baa6c43ca0328108b114fc84d908164f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.2.4+8eb8189c8316cb513f6bdaaab86bc04a6922b836")]
 [assembly: System.Reflection.AssemblyProductAttribute("FusionFramework")]
 [assembly: System.Reflection.AssemblyTitleAttribute("FusionFramework")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.2.4.0")]

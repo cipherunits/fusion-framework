@@ -523,3 +523,9 @@ pub extern "C" fn fusion_header_download(
     let media = if mt.is_empty() { None } else { Some(mt) };
     headers_map_json(&download(cstr_to_str(filename), media))
 }
+
+/// JSON map of default Fusion identity headers.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_fingerprint_headers() -> *mut c_char {
+    headers_map_json(&fusion_core::fingerprint_headers())
+}

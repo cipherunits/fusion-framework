@@ -63,6 +63,53 @@ pub const ACCESS_CONTROL_MAX_AGE: &str = "Access-Control-Max-Age";
 pub const ACCESS_CONTROL_REQUEST_METHOD: &str = "Access-Control-Request-Method";
 pub const ACCESS_CONTROL_REQUEST_HEADERS: &str = "Access-Control-Request-Headers";
 
+/// Classic stack fingerprint header (Wappalyzer / DevTools / similar).
+pub const X_POWERED_BY: &str = "X-Powered-By";
+/// Short framework id for detectors.
+pub const X_FRAMEWORK: &str = "X-Framework";
+/// Framework release version.
+pub const X_FUSION_VERSION: &str = "X-Fusion-Version";
+
+/// Display name used in ``X-Powered-By``.
+pub const FRAMEWORK_POWERED_BY: &str = "Fusion Framework";
+/// Short id used in ``X-Framework``.
+pub const FRAMEWORK_ID: &str = "Fusion";
+
+/// Current fusion-core package version (bindings share this via helpers).
+pub fn framework_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Default identity headers applied to every HTTP response (unless disabled).
+pub fn fingerprint_header_pairs() -> [(&'static str, String); 3] {
+    [
+        (X_POWERED_BY, FRAMEWORK_POWERED_BY.to_string()),
+        (X_FRAMEWORK, FRAMEWORK_ID.to_string()),
+        (X_FUSION_VERSION, framework_version().to_string()),
+    ]
+}
+
+/// Insert fingerprint headers if the response does not already set them.
+pub fn apply_fingerprint_headers(headers: &mut Vec<(String, String)>) {
+    for (name, value) in fingerprint_header_pairs() {
+        let exists = headers
+            .iter()
+            .any(|(n, _)| n.eq_ignore_ascii_case(name));
+        if !exists {
+            headers.push((name.to_string(), value));
+        }
+    }
+}
+
+/// Map form of [`fingerprint_header_pairs`] for language bindings / middleware.
+pub fn fingerprint_headers() -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    for (k, v) in fingerprint_header_pairs() {
+        map.insert(k.to_string(), v);
+    }
+    map
+}
+
 // ─── Common Content-Type values ──────────────────────────────────────────────
 
 pub const APPLICATION_JSON: &str = "application/json";
@@ -142,6 +189,11 @@ pub const HTTP_HEADER_CONSTANTS: &[(&str, &str)] = &[
     ("ACCESS_CONTROL_MAX_AGE", ACCESS_CONTROL_MAX_AGE),
     ("ACCESS_CONTROL_REQUEST_METHOD", ACCESS_CONTROL_REQUEST_METHOD),
     ("ACCESS_CONTROL_REQUEST_HEADERS", ACCESS_CONTROL_REQUEST_HEADERS),
+    ("X_POWERED_BY", X_POWERED_BY),
+    ("X_FRAMEWORK", X_FRAMEWORK),
+    ("X_FUSION_VERSION", X_FUSION_VERSION),
+    ("FRAMEWORK_POWERED_BY", FRAMEWORK_POWERED_BY),
+    ("FRAMEWORK_ID", FRAMEWORK_ID),
     ("APPLICATION_JSON", APPLICATION_JSON),
     ("APPLICATION_JSON_UTF8", APPLICATION_JSON_UTF8),
     ("APPLICATION_OCTET_STREAM", APPLICATION_OCTET_STREAM),

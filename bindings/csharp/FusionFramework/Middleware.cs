@@ -140,6 +140,33 @@ public static class Middleware
     public static FusionMiddleware RequireRoles(params string[] roles) =>
         RequireRoles((IEnumerable<string>)roles);
 
+    /// <summary>Default identity middleware — advertises Fusion on every response.</summary>
+    public static FusionMiddleware FrameworkHeaders()
+    {
+        var extra = Header.Fingerprint();
+        return (request, callNext) =>
+        {
+            var result = callNext(request);
+            if (result is Dictionary<string, object?> dict)
+            {
+                var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in extra) headers[kv.Key] = kv.Value;
+                if (dict.TryGetValue("headers", out var existing) && existing is IDictionary<string, string> map)
+                {
+                    foreach (var kv in map) headers[kv.Key] = kv.Value;
+                }
+                dict["headers"] = headers;
+                return dict;
+            }
+            return new Dictionary<string, object?>
+            {
+                ["status"] = 200,
+                ["body"] = result,
+                ["headers"] = extra,
+            };
+        };
+    }
+
     static object Error(int status, string detail) =>
         new Dictionary<string, object?>
         {

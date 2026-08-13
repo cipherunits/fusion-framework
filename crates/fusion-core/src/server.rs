@@ -16,9 +16,23 @@ use tokio::net::TcpListener;
 use tokio::signal;
 
 use crate::error::{Error, Result};
+use crate::headers::apply_fingerprint_headers;
 use crate::request::{parse_query, Request};
 use crate::response::Response;
 use crate::router::Router;
+
+/// Options for [`listen_with`].
+#[derive(Debug, Clone)]
+pub struct ListenOptions {
+    /// Add Fusion identity headers (`X-Powered-By`, …) on every response. Default: true.
+    pub fingerprint: bool,
+}
+
+impl Default for ListenOptions {
+    fn default() -> Self {
+        Self { fingerprint: true }
+    }
+}
 
 fn enable_colors() {
     // Touching Term initializes Windows VT processing when available.
@@ -42,10 +56,15 @@ fn color_status(status: u16) -> console::StyledObject<u16> {
 }
 
 pub async fn listen(router: Router, addr: SocketAddr) -> Result<()> {
+    listen_with(router, addr, ListenOptions::default()).await
+}
+
+pub async fn listen_with(router: Router, addr: SocketAddr, options: ListenOptions) -> Result<()> {
     enable_colors();
 
     let listener = TcpListener::bind(addr).await?;
     let router = Arc::new(router);
+    let options = Arc::new(options);
 
     let shutdown = shutdown_signal();
     tokio::pin!(shutdown);
@@ -63,13 +82,15 @@ pub async fn listen(router: Router, addr: SocketAddr) -> Result<()> {
                 let (stream, peer) = accepted?;
                 let io = TokioIo::new(stream);
                 let router = Arc::clone(&router);
+                let options = Arc::clone(&options);
 
                 tokio::spawn(async move {
                     let peer = peer.to_string();
                     let service = service_fn(move |req| {
                         let router = Arc::clone(&router);
+                        let options = Arc::clone(&options);
                         let peer = peer.clone();
-                        async move { handle_request(router, peer, req).await }
+                        async move { handle_request(router, options, peer, req).await }
                     });
 
                     if let Err(err) = http1::Builder::new().serve_connection(io, service).await {
@@ -129,6 +150,7 @@ async fn shutdown_signal() {
 
 async fn handle_request(
     router: Arc<Router>,
+    options: Arc<ListenOptions>,
     peer: String,
     req: HyperRequest<Incoming>,
 ) -> std::result::Result<HyperResponse<Full<Bytes>>, Infallible> {
@@ -156,7 +178,10 @@ async fn handle_request(
     let request =
         Request::new(method.clone(), path.clone(), headers, body_bytes).with_query(query);
 
-    let response = router.dispatch(request).await;
+    let mut response = router.dispatch(request).await;
+    if options.fingerprint {
+        apply_fingerprint_headers(&mut response.headers);
+    }
 
     let path_color = style(&path).blue().force_styling(true);
     let method_color = style(&method).cyan().force_styling(true);

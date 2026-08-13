@@ -183,6 +183,9 @@ internal static class Native
         [MarshalAs(UnmanagedType.LPUTF8Str)] string filename,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? mediaType);
 
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_fingerprint_headers();
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr FusionHandlerFn(
         IntPtr userData,

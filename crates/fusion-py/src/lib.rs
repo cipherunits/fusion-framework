@@ -565,6 +565,11 @@ fn header_download(
     btree_to_pydict(py, &download(filename, media_type))
 }
 
+#[pyfunction(name = "fingerprint_headers")]
+fn py_fingerprint_headers(py: Python<'_>) -> PyResult<Py<PyDict>> {
+    btree_to_pydict(py, &fusion_core::fingerprint_headers())
+}
+
 fn add_header_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = parent.py();
     let header = PyModule::new(py, "header")?;
@@ -594,5 +599,8 @@ fn add_header_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let sys = py.import("sys")?;
     let modules = sys.getattr("modules")?;
     modules.set_item("fusion_framework._fusion.header", &header)?;
+
+    // Top-level helper used by default middleware
+    parent.add_function(wrap_pyfunction!(py_fingerprint_headers, parent)?)?;
     Ok(())
 }

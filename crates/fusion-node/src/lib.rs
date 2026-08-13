@@ -3,9 +3,9 @@ use std::sync::Mutex;
 
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
-    api_resource_name, attachment, cache_control, coerce_param, content_type, download, inline,
-    location, param_kind_from_name, resolve_route_path, response_from_value, HTTP_HEADER_CONSTANTS,
-    HTTP_METHODS, HTTP_STATUS_CODES,
+    api_resource_name, attachment, cache_control, coerce_param, content_type, download,
+    fingerprint_headers, inline, location, param_kind_from_name, resolve_route_path,
+    response_from_value, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
@@ -464,4 +464,9 @@ pub fn header_download(
     media_type: Option<String>,
 ) -> std::collections::HashMap<String, String> {
     btree_to_hashmap(download(&filename, media_type.as_deref()))
+}
+
+#[napi]
+pub fn get_fingerprint_headers() -> std::collections::HashMap<String, String> {
+    btree_to_hashmap(fingerprint_headers())
 }

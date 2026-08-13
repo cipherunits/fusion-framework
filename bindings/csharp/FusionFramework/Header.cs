@@ -77,6 +77,10 @@ public static class Header
     public static Dictionary<string, string> Download(string filename, string? mediaType = null) =>
         ParseMap(Native.TakeUtf8(Native.fusion_header_download(filename, mediaType ?? "")));
 
+    /// <summary>Default Fusion identity headers (X-Powered-By, X-Framework, X-Fusion-Version).</summary>
+    public static Dictionary<string, string> Fingerprint() =>
+        ParseMap(Native.TakeUtf8(Native.fusion_fingerprint_headers()));
+
     static Dictionary<string, string> ParseMap(string json)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

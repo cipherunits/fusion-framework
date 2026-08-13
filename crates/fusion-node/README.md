@@ -35,7 +35,7 @@ export const ItemModule = route('/api/[module]/{id}')(
   },
 )
 
-const MIDDLEWARE = [] // optional — no defaults
+const MIDDLEWARE = [] // your middleware; Fusion already adds frameworkHeaders() by default
 
 settings.ensureLoaded()
 const app = new FusionApp(getSettings())

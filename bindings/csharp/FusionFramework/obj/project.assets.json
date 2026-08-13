@@ -8,7 +8,7 @@
     "net10.0": []
   },
   "packageFolders": {
-    "/tmp/cursor-sandbox-cache/eba9b8cfe206d837cd99301f633efef4/nuget": {}
+    "/tmp/cursor-sandbox-cache/5222f4d7fbf59562943df4e622b7aaac/nuget": {}
   },
   "project": {
     "version": "1.2.4",
@@ -16,11 +16,11 @@
       "projectUniqueName": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj",
       "projectName": "FusionFramework",
       "projectPath": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj",
-      "packagesPath": "/tmp/cursor-sandbox-cache/eba9b8cfe206d837cd99301f633efef4/nuget",
+      "packagesPath": "/tmp/cursor-sandbox-cache/5222f4d7fbf59562943df4e622b7aaac/nuget",
       "outputPath": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/tmp/dotnet-home-h/.nuget/NuGet/NuGet.Config"
+        "/tmp/dotnet-home-fp2/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net10.0"

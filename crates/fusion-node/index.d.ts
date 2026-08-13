@@ -112,6 +112,7 @@ export interface HeaderModule {
   location(url: string): Record<string, string>
   cacheControl(value: string): Record<string, string>
   download(filename: string, mediaType?: string | null): Record<string, string>
+  fingerprint(): Record<string, string>
 }
 
 export interface FusionSettings {
@@ -135,6 +136,8 @@ export type FusionMiddleware = (
   request: FusionRequest,
   callNext: (request: FusionRequest) => unknown | Promise<unknown>,
 ) => unknown | Promise<unknown>
+
+export function frameworkHeaders(): FusionMiddleware
 
 export type FusionResponse =
   | string

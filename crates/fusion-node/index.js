@@ -128,6 +128,33 @@ header.download = (filename, mediaType) =>
         ...header.attachment(filename),
       }
 
+header.fingerprint = () =>
+  typeof native.getFingerprintHeaders === 'function'
+    ? mergeHeaderMap(native.getFingerprintHeaders())
+    : {
+        'X-Powered-By': 'Fusion Framework',
+        'X-Framework': 'Fusion',
+        'X-Fusion-Version': '1.2.4',
+      }
+
+function frameworkHeaders() {
+  const extra = header.fingerprint()
+  return (request, callNext) => {
+    const result = callNext(request)
+    const apply = (value) => {
+      if (value && typeof value.then === 'function') {
+        return value.then(apply)
+      }
+      if (!value || typeof value !== 'object') {
+        return { status: 200, body: value, headers: { ...extra } }
+      }
+      const headers = { ...extra, ...(value.headers || {}) }
+      return { ...value, headers }
+    }
+    return apply(result)
+  }
+}
+
 class FusionBaseApi {
   constructor(request) {
     this.request = request
@@ -553,7 +580,8 @@ class FusionApp {
     this.settings = getSettings()
     this.engine = new NativeApp()
     this.mounted = false
-    this._middleware = []
+    // Default: advertise Fusion to clients / Wappalyzer-style detectors.
+    this._middleware = [frameworkHeaders()]
   }
 
   use(middleware) {
@@ -709,6 +737,7 @@ module.exports = {
   run,
   bearerJwt,
   requireRoles,
+  frameworkHeaders,
   runMiddlewareChain,
   coerceParam,
   getHttpMethods: () => HTTP_METHODS,
