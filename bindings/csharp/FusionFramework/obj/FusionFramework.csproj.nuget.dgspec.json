@@ -10,11 +10,11 @@
         "projectUniqueName": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj",
         "projectName": "FusionFramework",
         "projectPath": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj",
-        "packagesPath": "/tmp/cursor-sandbox-cache/856b4a7cd089979469c5026af82a6c5c/nuget",
+        "packagesPath": "/home/ehsan/.nuget/packages/",
         "outputPath": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/tmp/dotnet-home8/.nuget/NuGet/NuGet.Config"
+          "/home/ehsan/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"

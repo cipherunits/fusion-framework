@@ -27,7 +27,7 @@
     ]
   },
   "packageFolders": {
-    "/tmp/cursor-sandbox-cache/856b4a7cd089979469c5026af82a6c5c/nuget": {}
+    "/home/ehsan/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
@@ -35,11 +35,11 @@
       "projectUniqueName": "/home/ehsan/fusion-framework/examples/csharp_hello/csharp_hello.csproj",
       "projectName": "csharp_hello",
       "projectPath": "/home/ehsan/fusion-framework/examples/csharp_hello/csharp_hello.csproj",
-      "packagesPath": "/tmp/cursor-sandbox-cache/856b4a7cd089979469c5026af82a6c5c/nuget",
+      "packagesPath": "/home/ehsan/.nuget/packages/",
       "outputPath": "/home/ehsan/fusion-framework/examples/csharp_hello/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/tmp/dotnet-home8/.nuget/NuGet/NuGet.Config"
+        "/home/ehsan/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net10.0"
