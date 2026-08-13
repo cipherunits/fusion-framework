@@ -1,25 +1,21 @@
 {
   "name": "fusion-framework",
   "version": "1.1.2",
-  "description": "Build high-performance class-based HTTP APIs in Node.js on a shared Rust core — routing, middleware, JWT auth, and TypeScript types",
+  "description": "Class-based HTTP framework for Node.js, powered by a shared Rust core via N-API",
   "keywords": [
     "http",
     "framework",
     "nodejs",
-    "node",
-    "rust",
-    "napi",
     "http-server",
     "web-framework",
-    "rest-api",
+    "rest",
     "api",
     "routing",
     "middleware",
     "jwt",
     "typescript",
-    "openapi",
-    "swagger",
-    "hyper",
+    "napi",
+    "rust",
     "fusion"
   ],
   "homepage": "https://fusion.cipherunit.xyz/",
@@ -33,21 +29,32 @@
   },
   "author": "CipherUnits <cipherunit.dev@gmail.com>",
   "license": "MIT",
-  "main": "index.js",
-  "types": "index.d.ts",
+  "type": "commonjs",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "index.js",
     "index.d.ts",
     "README.md",
+    "LICENSE",
     "*.node"
   ],
   "napi": {
     "name": "fusion-node",
     "triples": {
-      "defaults": true,
+      "defaults": false,
       "additional": [
+        "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
-        "aarch64-apple-darwin"
+        "x86_64-pc-windows-msvc"
       ]
     }
   },
@@ -55,7 +62,7 @@
     "artifacts": "napi artifacts",
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "prepublishOnly": "napi prepublish -t npm --skip-gh-release"
+    "prepublishOnly": "node -e \"const fs=require('fs');const ok=fs.readdirSync('.').some(f=>f.endsWith('.node'));if(!ok){console.error('Missing native .node binaries before publish');process.exit(1)}\""
   },
   "publishConfig": {
     "access": "public",
@@ -63,8 +70,12 @@
     "provenance": true
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=18"
   },
+  "os": [
+    "linux",
+    "win32"
+  ],
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4"
   }
