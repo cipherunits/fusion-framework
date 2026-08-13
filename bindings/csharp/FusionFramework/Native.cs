@@ -154,6 +154,35 @@ internal static class Native
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr fusion_http_status_codes();
 
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_http_header_constants();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_header_attachment(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filename);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_header_inline(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? filename);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_header_content_type(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string mediaType,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? charset);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_header_location(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string url);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_header_cache_control(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string value);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_header_download(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filename,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? mediaType);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr FusionHandlerFn(
         IntPtr userData,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 from fusion_framework._fusion import http_error_to_response
 
@@ -10,10 +10,16 @@ from fusion_framework._fusion import http_error_to_response
 class HTTPException(Exception):
     """Raise inside a handler to return an HTTP error response."""
 
-    def __init__(self, status: int, detail: Any = None, **headers: str):
+    def __init__(
+        self,
+        status: int,
+        detail: Any = None,
+        headers: Mapping[str, str] | None = None,
+        **extra: str,
+    ):
         self.status = int(status)
         self.detail = "" if detail is None else detail
-        self.headers = headers
+        self.headers = {**(headers or {}), **extra}
         super().__init__(self._message())
 
     def _message(self) -> str:
@@ -22,4 +28,4 @@ class HTTPException(Exception):
         return f"HTTP {self.status}"
 
     def to_response(self) -> dict[str, Any]:
-        return http_error_to_response(self.status, self.detail, **self.headers)
+        return http_error_to_response(self.status, self.detail, headers=self.headers)

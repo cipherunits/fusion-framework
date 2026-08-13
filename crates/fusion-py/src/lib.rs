@@ -4,8 +4,9 @@ use std::sync::Mutex;
 use bytes::Bytes;
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
-    api_resource_name, coerce_param, param_kind_from_name,
-    response_from_value, HTTP_METHODS, HTTP_STATUS_CODES,
+    api_resource_name, attachment, cache_control, coerce_param, content_type, download, inline,
+    location, param_kind_from_name, response_from_value, HTTP_HEADER_CONSTANTS, HTTP_METHODS,
+    HTTP_STATUS_CODES,
 };
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
@@ -479,6 +480,7 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_openapi_spec, m)?)?;
     m.add("HTTP_METHODS", HTTP_METHODS)?;
     add_status_module(m)?;
+    add_header_module(m)?;
 
     // Global settings singleton — shared JSON/env logic from fusion-core.
     m.add(
@@ -508,5 +510,89 @@ fn add_status_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let sys = py.import("sys")?;
     let modules = sys.getattr("modules")?;
     modules.set_item("fusion_framework._fusion.status", &status)?;
+    Ok(())
+}
+
+fn btree_to_pydict(py: Python<'_>, map: &std::collections::BTreeMap<String, String>) -> PyResult<Py<PyDict>> {
+    let dict = PyDict::new(py);
+    for (k, v) in map {
+        dict.set_item(k, v)?;
+    }
+    Ok(dict.unbind())
+}
+
+#[pyfunction(name = "attachment")]
+#[pyo3(signature = (filename))]
+fn header_attachment(py: Python<'_>, filename: &str) -> PyResult<Py<PyDict>> {
+    btree_to_pydict(py, &attachment(filename))
+}
+
+#[pyfunction(name = "inline")]
+#[pyo3(signature = (filename=None))]
+fn header_inline(py: Python<'_>, filename: Option<&str>) -> PyResult<Py<PyDict>> {
+    btree_to_pydict(py, &inline(filename))
+}
+
+#[pyfunction(name = "content_type")]
+#[pyo3(signature = (media_type, charset=None))]
+fn header_content_type(
+    py: Python<'_>,
+    media_type: &str,
+    charset: Option<&str>,
+) -> PyResult<Py<PyDict>> {
+    btree_to_pydict(py, &content_type(media_type, charset))
+}
+
+#[pyfunction(name = "location")]
+#[pyo3(signature = (url))]
+fn header_location(py: Python<'_>, url: &str) -> PyResult<Py<PyDict>> {
+    btree_to_pydict(py, &location(url))
+}
+
+#[pyfunction(name = "cache_control")]
+#[pyo3(signature = (value))]
+fn header_cache_control(py: Python<'_>, value: &str) -> PyResult<Py<PyDict>> {
+    btree_to_pydict(py, &cache_control(value))
+}
+
+#[pyfunction(name = "download")]
+#[pyo3(signature = (filename, media_type=None))]
+fn header_download(
+    py: Python<'_>,
+    filename: &str,
+    media_type: Option<&str>,
+) -> PyResult<Py<PyDict>> {
+    btree_to_pydict(py, &download(filename, media_type))
+}
+
+fn add_header_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = parent.py();
+    let header = PyModule::new(py, "header")?;
+    let mut names = Vec::with_capacity(HTTP_HEADER_CONSTANTS.len() + 6);
+    for &(name, value) in HTTP_HEADER_CONSTANTS {
+        header.add(name, value)?;
+        names.push(name);
+    }
+    header.add_function(wrap_pyfunction!(header_attachment, &header)?)?;
+    header.add_function(wrap_pyfunction!(header_inline, &header)?)?;
+    header.add_function(wrap_pyfunction!(header_content_type, &header)?)?;
+    header.add_function(wrap_pyfunction!(header_location, &header)?)?;
+    header.add_function(wrap_pyfunction!(header_cache_control, &header)?)?;
+    header.add_function(wrap_pyfunction!(header_download, &header)?)?;
+    names.extend([
+        "attachment",
+        "inline",
+        "content_type",
+        "location",
+        "cache_control",
+        "download",
+    ]);
+    header.setattr("__all__", names)?;
+    parent.add_submodule(&header)?;
+    parent.setattr("header", &header)?;
+
+    let sys = py.import("sys")?;
+    let modules = sys.getattr("modules")?;
+    modules.set_item("fusion_framework._fusion.header", &header)?;
     Ok(())
 }

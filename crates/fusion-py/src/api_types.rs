@@ -156,7 +156,7 @@ impl PyFusionBaseApi {
         }
     }
 
-    #[pyo3(signature = (body=None, status=200, **headers))]
+    #[pyo3(signature = (body=None, status=200, headers=None))]
     fn response(
         &self,
         py: Python<'_>,
@@ -182,7 +182,7 @@ impl PyFusionBaseApi {
 // ─── HTTP error helpers ──────────────────────────────────────────────────────
 
 #[pyfunction(name = "http_error_to_response")]
-#[pyo3(signature = (status, detail=None, **headers))]
+#[pyo3(signature = (status, detail=None, headers=None))]
 pub fn http_error_to_response(
     py: Python<'_>,
     status: u16,

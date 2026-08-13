@@ -94,7 +94,25 @@ export function coerceParamJs(raw: string, kind?: string): unknown
 
 export const settings: Settings
 export const status: Record<string, number>
+export const header: HeaderModule
 export const HTTP_METHODS: string[]
+
+export interface HeaderModule {
+  [name: string]: string | ((...args: any[]) => Record<string, string>)
+  CONTENT_TYPE: string
+  CONTENT_DISPOSITION: string
+  LOCATION: string
+  AUTHORIZATION: string
+  APPLICATION_JSON: string
+  APPLICATION_OCTET_STREAM: string
+  APPLICATION_PDF: string
+  attachment(filename: string): Record<string, string>
+  inline(filename?: string | null): Record<string, string>
+  contentType(mediaType: string, charset?: string | null): Record<string, string>
+  location(url: string): Record<string, string>
+  cacheControl(value: string): Record<string, string>
+  download(filename: string, mediaType?: string | null): Record<string, string>
+}
 
 export interface FusionSettings {
   host: string

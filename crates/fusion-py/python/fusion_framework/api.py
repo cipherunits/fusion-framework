@@ -47,13 +47,23 @@ class FusionBaseApi:
     def state(self) -> Mapping[str, Any]:
         return self.request.get("state") or {}
 
-    def response(self, body: Any = "", status: int = 200, **headers: str) -> dict[str, Any]:
-        """Build an HTTP envelope: ``{\"status\": ..., \"body\": ...}``."""
+    def response(
+        self,
+        body: Any = "",
+        status: int = 200,
+        headers: Mapping[str, str] | None = None,
+        **extra: str,
+    ) -> dict[str, Any]:
+        """Build an HTTP envelope: ``{\"status\": ..., \"body\": ..., \"headers\": ...}``.
+
+        Prefer ``headers=`` (or ``headers=header.download(...)``) for names with hyphens.
+        """
         response: dict[str, Any] = {"status": status, "body": body}
+        hdrs: dict[str, str] = {**(headers or {}), **extra}
         if not isinstance(body, (str, bytes)) and body is not None:
-            headers = {"content-type": "application/json", **headers}
-        if headers:
-            response["headers"] = headers
+            hdrs = {"content-type": "application/json", **hdrs}
+        if hdrs:
+            response["headers"] = hdrs
         return response
 
 

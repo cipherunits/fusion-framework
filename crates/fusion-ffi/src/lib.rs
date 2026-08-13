@@ -12,7 +12,8 @@ use std::ptr;
 
 use fusion_core::{
     api_resource_name, resolve_route_path, response_from_value, App, Handler, Request, Response,
-    Settings, HTTP_METHODS, HTTP_STATUS_CODES,
+    Settings, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, attachment, cache_control,
+    content_type, download, inline, location,
 };
 use serde_json::{Map, Value};
 
@@ -460,4 +461,65 @@ pub extern "C" fn fusion_http_status_codes() -> *mut c_char {
         map.insert((*name).to_string(), Value::from(*code));
     }
     to_cstring(&Value::Object(map).to_string())
+}
+
+/// JSON object `{ "CONTENT_TYPE": "Content-Type", "APPLICATION_JSON": "application/json", ... }`.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_http_header_constants() -> *mut c_char {
+    let mut map = Map::new();
+    for (name, value) in HTTP_HEADER_CONSTANTS {
+        map.insert((*name).to_string(), Value::String((*value).to_string()));
+    }
+    to_cstring(&Value::Object(map).to_string())
+}
+
+fn headers_map_json(map: &std::collections::BTreeMap<String, String>) -> *mut c_char {
+    let mut obj = Map::new();
+    for (k, v) in map {
+        obj.insert(k.clone(), Value::String(v.clone()));
+    }
+    to_cstring(&Value::Object(obj).to_string())
+}
+
+/// JSON map for `Content-Disposition: attachment; filename=...`.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_header_attachment(filename: *const c_char) -> *mut c_char {
+    headers_map_json(&attachment(cstr_to_str(filename)))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_header_inline(filename: *const c_char) -> *mut c_char {
+    let raw = cstr_to_str(filename);
+    let opt = if raw.is_empty() { None } else { Some(raw) };
+    headers_map_json(&inline(opt))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_header_content_type(
+    media_type: *const c_char,
+    charset: *const c_char,
+) -> *mut c_char {
+    let cs = cstr_to_str(charset);
+    let charset = if cs.is_empty() { None } else { Some(cs) };
+    headers_map_json(&content_type(cstr_to_str(media_type), charset))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_header_location(url: *const c_char) -> *mut c_char {
+    headers_map_json(&location(cstr_to_str(url)))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_header_cache_control(value: *const c_char) -> *mut c_char {
+    headers_map_json(&cache_control(cstr_to_str(value)))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_header_download(
+    filename: *const c_char,
+    media_type: *const c_char,
+) -> *mut c_char {
+    let mt = cstr_to_str(media_type);
+    let media = if mt.is_empty() { None } else { Some(mt) };
+    headers_map_json(&download(cstr_to_str(filename), media))
 }

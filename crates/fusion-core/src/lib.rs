@@ -3,6 +3,7 @@ mod coerce;
 mod dispatch;
 mod error;
 mod handler;
+mod headers;
 mod http_error;
 mod naming;
 mod request;
@@ -18,6 +19,10 @@ pub use coerce::{ParamKind, coerce_param, param_kind_from_name};
 pub use dispatch::{ParamSpec, bind_args, build_response, parse_json_object, BODY_METHODS};
 pub use error::{Error, Result};
 pub use handler::{Handler, HandlerFuture, SyncHandler};
+pub use headers::{
+    attachment, cache_control, content_disposition_attachment, content_disposition_inline,
+    content_type, content_type_value, download, inline, location, HTTP_HEADER_CONSTANTS,
+};
 pub use http_error::HttpError;
 pub use naming::{HTTP_METHODS, api_resource_name, resolve_route_path};
 pub use request::{parse_query, Request};

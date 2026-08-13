@@ -3,8 +3,9 @@ use std::sync::Mutex;
 
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
-    api_resource_name, coerce_param, param_kind_from_name, resolve_route_path,
-    response_from_value, HTTP_METHODS, HTTP_STATUS_CODES,
+    api_resource_name, attachment, cache_control, coerce_param, content_type, download, inline,
+    location, param_kind_from_name, resolve_route_path, response_from_value, HTTP_HEADER_CONSTANTS,
+    HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
@@ -404,4 +405,63 @@ pub fn get_http_status_codes() -> Vec<HttpStatusCode> {
             code: *code,
         })
         .collect()
+}
+
+#[napi(object)]
+pub struct HttpHeaderConstant {
+    pub name: String,
+    pub value: String,
+}
+
+#[napi]
+pub fn get_http_header_constants() -> Vec<HttpHeaderConstant> {
+    HTTP_HEADER_CONSTANTS
+        .iter()
+        .map(|(name, value)| HttpHeaderConstant {
+            name: (*name).to_string(),
+            value: (*value).to_string(),
+        })
+        .collect()
+}
+
+fn btree_to_hashmap(
+    map: std::collections::BTreeMap<String, String>,
+) -> std::collections::HashMap<String, String> {
+    map.into_iter().collect()
+}
+
+#[napi]
+pub fn header_attachment(filename: String) -> std::collections::HashMap<String, String> {
+    btree_to_hashmap(attachment(&filename))
+}
+
+#[napi]
+pub fn header_inline(filename: Option<String>) -> std::collections::HashMap<String, String> {
+    btree_to_hashmap(inline(filename.as_deref()))
+}
+
+#[napi]
+pub fn header_content_type(
+    media_type: String,
+    charset: Option<String>,
+) -> std::collections::HashMap<String, String> {
+    btree_to_hashmap(content_type(&media_type, charset.as_deref()))
+}
+
+#[napi]
+pub fn header_location(url: String) -> std::collections::HashMap<String, String> {
+    btree_to_hashmap(location(&url))
+}
+
+#[napi]
+pub fn header_cache_control(value: String) -> std::collections::HashMap<String, String> {
+    btree_to_hashmap(cache_control(&value))
+}
+
+#[napi]
+pub fn header_download(
+    filename: String,
+    media_type: Option<String>,
+) -> std::collections::HashMap<String, String> {
+    btree_to_hashmap(download(&filename, media_type.as_deref()))
 }

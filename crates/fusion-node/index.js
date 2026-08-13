@@ -63,6 +63,71 @@ if (typeof native.getHttpStatusCodes === 'function') {
   })
 }
 
+const header = Object.create(null)
+if (typeof native.getHttpHeaderConstants === 'function') {
+  for (const entry of native.getHttpHeaderConstants()) {
+    header[entry.name] = entry.value
+  }
+} else {
+  Object.assign(header, {
+    CONTENT_TYPE: 'Content-Type',
+    CONTENT_DISPOSITION: 'Content-Disposition',
+    LOCATION: 'Location',
+    AUTHORIZATION: 'Authorization',
+    APPLICATION_JSON: 'application/json',
+    APPLICATION_OCTET_STREAM: 'application/octet-stream',
+    APPLICATION_PDF: 'application/pdf',
+  })
+}
+
+function mergeHeaderMap(map) {
+  return map && typeof map === 'object' ? { ...map } : {}
+}
+
+header.attachment = (filename) =>
+  typeof native.headerAttachment === 'function'
+    ? mergeHeaderMap(native.headerAttachment(String(filename)))
+    : { [header.CONTENT_DISPOSITION]: `attachment; filename="${filename}"` }
+
+header.inline = (filename) =>
+  typeof native.headerInline === 'function'
+    ? mergeHeaderMap(native.headerInline(filename == null ? null : String(filename)))
+    : filename
+      ? { [header.CONTENT_DISPOSITION]: `inline; filename="${filename}"` }
+      : { [header.CONTENT_DISPOSITION]: 'inline' }
+
+header.contentType = (mediaType, charset) =>
+  typeof native.headerContentType === 'function'
+    ? mergeHeaderMap(native.headerContentType(String(mediaType), charset == null ? null : String(charset)))
+    : {
+        [header.CONTENT_TYPE]: charset
+          ? `${mediaType}; charset=${charset}`
+          : String(mediaType),
+      }
+
+header.location = (url) =>
+  typeof native.headerLocation === 'function'
+    ? mergeHeaderMap(native.headerLocation(String(url)))
+    : { [header.LOCATION]: String(url) }
+
+header.cacheControl = (value) =>
+  typeof native.headerCacheControl === 'function'
+    ? mergeHeaderMap(native.headerCacheControl(String(value)))
+    : { 'Cache-Control': String(value) }
+
+header.download = (filename, mediaType) =>
+  typeof native.headerDownload === 'function'
+    ? mergeHeaderMap(
+        native.headerDownload(
+          String(filename),
+          mediaType == null ? null : String(mediaType),
+        ),
+      )
+    : {
+        ...header.contentType(mediaType || header.APPLICATION_OCTET_STREAM),
+        ...header.attachment(filename),
+      }
+
 class FusionBaseApi {
   constructor(request) {
     this.request = request
@@ -639,6 +704,7 @@ module.exports = {
   getSettings,
   settings,
   status,
+  header,
   HTTP_METHODS,
   run,
   bearerJwt,
