@@ -36,7 +36,53 @@ public static class Middleware
             return mw(req, next => Dispatch(index + 1, next));
         }
 
-        return Dispatch(0, request);
+        // Sync FFI callback: unwrap Task/ValueTask from async handlers / middleware.
+        return ResolveAwaitable(Dispatch(0, request));
+    }
+
+    /// <summary>
+    /// Unwrap nested <see cref="Task"/> / <see cref="ValueTask"/> results (async API methods).
+    /// Mirrors Python awaiting coroutines before treating the value as an HTTP body.
+    /// </summary>
+    public static object? ResolveAwaitable(object? result)
+    {
+        for (var depth = 0; depth < 8; depth++)
+        {
+            switch (result)
+            {
+                case null:
+                    return null;
+                case Task task:
+                {
+                    task.ConfigureAwait(false).GetAwaiter().GetResult();
+                    var t = task.GetType();
+                    if (t.IsGenericType)
+                    {
+                        result = t.GetProperty("Result")?.GetValue(task);
+                        continue;
+                    }
+                    return null;
+                }
+                default:
+                {
+                    var type = result.GetType();
+                    if (type == typeof(ValueTask))
+                    {
+                        ((ValueTask)result).ConfigureAwait(false).GetAwaiter().GetResult();
+                        return null;
+                    }
+                    if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>))
+                    {
+                        // ValueTask<T> → Task<T> then unwrap on next iteration.
+                        result = type.GetMethod("AsTask")!.Invoke(result, null);
+                        continue;
+                    }
+                    return result;
+                }
+            }
+        }
+
+        throw new InvalidOperationException("Awaitable nesting too deep");
     }
 
     public static Dictionary<string, JsonNode?> EnsureState(FusionRequest request)
@@ -146,24 +192,32 @@ public static class Middleware
         var extra = Header.Fingerprint();
         return (request, callNext) =>
         {
-            var result = callNext(request);
-            if (result is Dictionary<string, object?> dict)
+            // Must resolve awaitables first — otherwise Task becomes the JSON body
+            // (same class of bug as Python's un-awaited coroutine stringification).
+            var result = ResolveAwaitable(callNext(request));
+            return MergeResponseHeaders(result, extra);
+        };
+    }
+
+    internal static object MergeResponseHeaders(object? result, IReadOnlyDictionary<string, string> extra)
+    {
+        if (result is Dictionary<string, object?> dict)
+        {
+            var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in extra) headers[kv.Key] = kv.Value;
+            if (dict.TryGetValue("headers", out var existing) && existing is IDictionary<string, string> map)
             {
-                var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var kv in extra) headers[kv.Key] = kv.Value;
-                if (dict.TryGetValue("headers", out var existing) && existing is IDictionary<string, string> map)
-                {
-                    foreach (var kv in map) headers[kv.Key] = kv.Value;
-                }
-                dict["headers"] = headers;
-                return dict;
+                foreach (var kv in map) headers[kv.Key] = kv.Value;
             }
-            return new Dictionary<string, object?>
-            {
-                ["status"] = 200,
-                ["body"] = result,
-                ["headers"] = extra,
-            };
+            dict["headers"] = headers;
+            return dict;
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["status"] = 200,
+            ["body"] = result,
+            ["headers"] = new Dictionary<string, string>(extra, StringComparer.OrdinalIgnoreCase),
         };
     }
 

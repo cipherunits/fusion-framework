@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import inspect
 import json
@@ -35,7 +34,7 @@ def clear_active_global() -> None:
 
 
 async def _maybe_await(value: MaybeAwaitable) -> Any:
-    if asyncio.iscoroutine(value) or asyncio.isfuture(value):
+    if inspect.isawaitable(value):
         return await value
     return value
 
@@ -78,8 +77,11 @@ def _run_chain_sync(
             return dispatch(index + 1, next_req)
 
         result = middleware(req, call_next)
+        # Sync middleware may return a coroutine when the route handler is
+        # ``async def`` (HandlerInvoker is sync but yields an awaitable).
+        # Propagate to Rust so ``async_runtime.submit`` can await it.
         if inspect.isawaitable(result):
-            raise RuntimeError("async middleware requires an async app runtime")
+            return result
         if _is_response(result):
             return result
         return result
@@ -203,6 +205,22 @@ def _merge_response_headers(result: Any, extra: dict[str, str]) -> Any:
     return out
 
 
+def _call_next_merge_headers(
+    call_next: Callable[[RequestDict], Any],
+    request: RequestDict,
+    extra: dict[str, str],
+) -> Any:
+    """Merge headers after ``call_next``, awaiting async handler results."""
+    result = call_next(request)
+    if inspect.isawaitable(result):
+
+        async def _await_merge() -> Any:
+            return _merge_response_headers(await result, extra)
+
+        return _await_merge()
+    return _merge_response_headers(result, extra)
+
+
 def framework_headers() -> Middleware:
     """Default identity middleware: advertise Fusion on every response.
 
@@ -215,18 +233,25 @@ def framework_headers() -> Middleware:
 
         extra = dict(_fp())
     except Exception:
-        from fusion_framework import header as hdr
+        try:
+            from fusion_framework import header as hdr
 
-        extra = {
-            getattr(hdr, "X_POWERED_BY", "X-Powered-By"): getattr(
-                hdr, "FRAMEWORK_POWERED_BY", "Fusion Framework"
-            ),
-            getattr(hdr, "X_FRAMEWORK", "X-Framework"): getattr(hdr, "FRAMEWORK_ID", "Fusion"),
-            getattr(hdr, "X_FUSION_VERSION", "X-Fusion-Version"): "1.2.0",
-        }
+            extra = {
+                getattr(hdr, "X_POWERED_BY", "X-Powered-By"): getattr(
+                    hdr, "FRAMEWORK_POWERED_BY", "Fusion Framework"
+                ),
+                getattr(hdr, "X_FRAMEWORK", "X-Framework"): getattr(hdr, "FRAMEWORK_ID", "Fusion"),
+                getattr(hdr, "X_FUSION_VERSION", "X-Fusion-Version"): "1.2.0",
+            }
+        except Exception:
+            extra = {
+                "X-Powered-By": "Fusion Framework",
+                "X-Framework": "Fusion",
+                "X-Fusion-Version": "1.2.0",
+            }
 
     def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
-        return _merge_response_headers(call_next(request), extra)
+        return _call_next_merge_headers(call_next, request, extra)
 
     return middleware
 

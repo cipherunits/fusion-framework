@@ -137,21 +137,34 @@ header.fingerprint = () =>
         'X-Fusion-Version': '1.2.0',
       }
 
+function isThenable(value) {
+  return value != null && typeof value.then === 'function'
+}
+
+async function awaitMaybe(value) {
+  // Nested thenables (middleware wrapping async handlers) — same idea as Python
+  // awaiting coroutines before treating the value as an HTTP body.
+  let current = value
+  for (let i = 0; i < 8 && isThenable(current); i++) {
+    current = await current
+  }
+  return current
+}
+
+function mergeResponseHeaders(result, extra) {
+  if (!result || typeof result !== 'object') {
+    return { status: 200, body: result, headers: { ...extra } }
+  }
+  const headers = { ...extra, ...(result.headers || {}) }
+  return { ...result, headers }
+}
+
 function frameworkHeaders() {
   const extra = header.fingerprint()
-  return (request, callNext) => {
-    const result = callNext(request)
-    const apply = (value) => {
-      if (value && typeof value.then === 'function') {
-        return value.then(apply)
-      }
-      if (!value || typeof value !== 'object') {
-        return { status: 200, body: value, headers: { ...extra } }
-      }
-      const headers = { ...extra, ...(value.headers || {}) }
-      return { ...value, headers }
-    }
-    return apply(result)
+  // Async so Promises from callNext are never stuffed into `body` as objects.
+  return async (request, callNext) => {
+    const result = await awaitMaybe(callNext(request))
+    return mergeResponseHeaders(result, extra)
   }
 }
 
@@ -219,18 +232,14 @@ function isResponse(value) {
 
 async function runMiddlewareChain(request, middlewares, handler) {
   ensureState(request)
-  let index = 0
 
   async function dispatch(i, req) {
     if (i >= middlewares.length) {
-      return await handler(req)
+      return await awaitMaybe(handler(req))
     }
     const middleware = middlewares[i]
     const callNext = (nextReq) => dispatch(i + 1, nextReq)
-    let result = middleware(req, callNext)
-    if (result && typeof result.then === 'function') {
-      result = await result
-    }
+    const result = await awaitMaybe(middleware(req, callNext))
     if (isResponse(result)) return result
     return result
   }

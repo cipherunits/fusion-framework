@@ -78,9 +78,22 @@ public static class Header
         ParseMap(Native.TakeUtf8(Native.fusion_header_download(filename, mediaType ?? "")));
 
     /// <summary>Default Fusion identity headers (X-Powered-By, X-Framework, X-Fusion-Version).</summary>
-    public static Dictionary<string, string> Fingerprint() =>
-        ParseMap(Native.TakeUtf8(Native.fusion_fingerprint_headers()));
-
+    public static Dictionary<string, string> Fingerprint()
+    {
+        try
+        {
+            return ParseMap(Native.TakeUtf8(Native.fusion_fingerprint_headers()));
+        }
+        catch
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["X-Powered-By"] = "Fusion Framework",
+                ["X-Framework"] = "Fusion",
+                ["X-Fusion-Version"] = "1.2.0",
+            };
+        }
+    }
     static Dictionary<string, string> ParseMap(string json)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

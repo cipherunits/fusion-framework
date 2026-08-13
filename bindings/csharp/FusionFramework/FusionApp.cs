@@ -78,6 +78,7 @@ public sealed class FusionApp : IDisposable
                             {
                                 var instance = (FusionBaseApi)Activator.CreateInstance(s.Entry.ApiClass)!;
                                 instance.Request = r;
+                                // Async methods return Task/ValueTask — RunChain unwraps them.
                                 return s.Handler.Invoke(instance, null);
                             });
                         }
@@ -90,6 +91,8 @@ public sealed class FusionApp : IDisposable
                             result = hex.ToResponse();
                         }
 
+                        // Final guard: never serialize a raw Task as the response body.
+                        result = Middleware.ResolveAwaitable(result);
                         var json = JsonUtil.SerializeResponse(result);
                         return Native.fusion_string_dup(json);
                     }
