@@ -124,7 +124,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "fusion-core"
-version = "1.2.4"
+version = "1.2.0"
 dependencies = [
  "bytes",
  "console",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "fusion-ffi"
-version = "1.2.4"
+version = "1.2.0"
 dependencies = [
  "bytes",
  "fusion-core",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "fusion-node"
-version = "1.2.4"
+version = "1.2.0"
 dependencies = [
  "fusion-core",
  "napi",
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "fusion-py"
-version = "1.2.4"
+version = "1.2.0"
 dependencies = [
  "bytes",
  "fusion-core",
