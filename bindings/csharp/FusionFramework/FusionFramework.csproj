@@ -6,7 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>FusionFramework</RootNamespace>
     <AssemblyName>FusionFramework</AssemblyName>
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <Description>Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core</Description>
     <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
     <NuGetAudit>false</NuGetAudit>

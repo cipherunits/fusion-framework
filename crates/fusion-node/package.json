@@ -1,6 +1,6 @@
 {
   "name": "fusion-framework",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Class-based HTTP framework for Node.js, powered by a shared Rust core via N-API",
   "keywords": [
     "http",
