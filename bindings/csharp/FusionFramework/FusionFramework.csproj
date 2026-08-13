@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>FusionFramework</RootNamespace>
+    <AssemblyName>FusionFramework</AssemblyName>
+    <Version>1.1.2</Version>
+    <Description>Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NuGetAudit>false</NuGetAudit>
+    <!-- Prefer installed targeting packs over downloading *.App.Ref from NuGet. -->
+    <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
+  </PropertyGroup>
+</Project>

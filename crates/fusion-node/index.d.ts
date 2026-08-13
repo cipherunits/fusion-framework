@@ -44,36 +44,56 @@ export class FusionApp {
   listen(host?: string, port?: number): Promise<void>
 }
 
-export function router(
-  path: string,
-  options?: {
-    tags?: string[]
-    desc?: string
-    title?: string
-    version?: string
-    deprecated?: boolean
-    middleware?: FusionMiddleware[]
-    roles?: string[]
-  }
-): <T>(ApiClass: T) => T
-export function bearerJwt(options?: { stateKey?: string; header?: string }): FusionMiddleware
+export type RouteOptions = {
+  tags?: string[]
+  desc?: string
+  title?: string
+  version?: string
+  deprecated?: boolean
+  middleware?: FusionMiddleware[]
+  roles?: string[]
+  roleClaim?: string
+  roleStateKey?: string
+}
+
+export function router(path: string, options?: RouteOptions): <T>(ApiClass: T) => T
+/** Alias of `router`. */
+export function route(path: string, options?: RouteOptions): <T>(ApiClass: T) => T
+
+export function bearerJwt(options?: {
+  stateKey?: string
+  header?: string
+  verify?: (token: string) => Record<string, unknown> | null
+}): FusionMiddleware
+
 export function requireRoles(...roles: string[]): FusionMiddleware
+export function requireRoles(options: {
+  roles: string[]
+  claim?: string
+  stateKey?: string
+}): FusionMiddleware
+
 export function runMiddlewareChain(
   request: FusionRequest,
   middlewares: FusionMiddleware[],
   handler: (request: FusionRequest) => unknown | Promise<unknown>,
 ): Promise<unknown>
+
 export function apiResourceName(cls: { name: string } | string): string
 export function resolveRoutePath(path: string, cls: { name: string }): string
 export function configure(settings: Record<string, unknown>): FusionSettings
 export function getSettings(): FusionSettings
-export function run(settingsModulePath?: string): Promise<void>
+export function run(
+  options?: string | { settingsModule?: string; middleware?: FusionMiddleware[] },
+): Promise<FusionApp>
+export function coerceParam(raw: string, kind?: string): unknown
 export function getHttpMethods(): string[]
 export function apiResourceNameJs(className: string): string
 export function resolveRoutePathJs(template: string, className: string): string
 export function coerceParamJs(raw: string, kind?: string): unknown
 
 export const settings: Settings
+export const status: Record<string, number>
 export const HTTP_METHODS: string[]
 
 export interface FusionSettings {

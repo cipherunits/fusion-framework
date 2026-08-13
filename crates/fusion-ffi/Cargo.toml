@@ -1,0 +1,16 @@
+[package]
+name = "fusion-ffi"
+version.workspace = true
+edition.workspace = true
+description = "C ABI for fusion-core (C# and other FFI consumers)"
+license = "MIT"
+
+[lib]
+name = "fusion_ffi"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+fusion-core = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+bytes = { workspace = true }

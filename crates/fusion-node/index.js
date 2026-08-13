@@ -41,6 +41,27 @@ const NativeSettings = native.Settings
 const HTTP_METHODS = native.getHttpMethods()
 const settings = new NativeSettings()
 const registry = []
+let activeGlobalMiddleware = []
+
+const status = Object.create(null)
+if (typeof native.getHttpStatusCodes === 'function') {
+  for (const entry of native.getHttpStatusCodes()) {
+    status[entry.name] = entry.code
+  }
+} else {
+  // Fallback if native addon is older
+  Object.assign(status, {
+    HTTP_SUCCESS: 200,
+    HTTP_200_OK: 200,
+    HTTP_201_CREATED: 201,
+    HTTP_204_NO_CONTENT: 204,
+    HTTP_400_BAD_REQUEST: 400,
+    HTTP_401_UNAUTHORIZED: 401,
+    HTTP_403_FORBIDDEN: 403,
+    HTTP_404_NOT_FOUND: 404,
+    HTTP_500_INTERNAL_SERVER_ERROR: 500,
+  })
+}
 
 class FusionBaseApi {
   constructor(request) {
@@ -93,9 +114,6 @@ function resolveRoutePath(routePath, ApiClass) {
   return native.resolveRoutePathJs(routePath, ApiClass.name)
 }
 
-const registry = []
-let activeGlobalMiddleware = []
-
 function ensureState(request) {
   if (!request.state || typeof request.state !== 'object') {
     request.state = {}
@@ -128,20 +146,34 @@ async function runMiddlewareChain(request, middlewares, handler) {
   return dispatch(0, request)
 }
 
-function requireRoles(...roles) {
+function requireRoles(...rolesOrOptions) {
+  let roles = rolesOrOptions
+  let claim = 'roles'
+  let stateKey = 'jwt'
+  if (
+    rolesOrOptions.length === 1 &&
+    rolesOrOptions[0] &&
+    typeof rolesOrOptions[0] === 'object' &&
+    !Array.isArray(rolesOrOptions[0])
+  ) {
+    const opts = rolesOrOptions[0]
+    roles = Array.isArray(opts.roles) ? opts.roles : []
+    if (opts.claim) claim = opts.claim
+    if (opts.stateKey) stateKey = opts.stateKey
+  }
   const allowed = new Set(roles.map(String))
   return (request, callNext) => {
-    const payload = ensureState(request).jwt
+    const payload = ensureState(request)[stateKey]
     if (!payload) {
       return { status: 401, body: { detail: 'Authentication required' } }
     }
-    let userRoles = payload.roles
+    let userRoles = payload[claim]
     if (userRoles == null) {
-      return { status: 403, body: { detail: "Missing 'roles' claim" } }
+      return { status: 403, body: { detail: `Missing '${claim}' claim` } }
     }
     if (typeof userRoles === 'string') userRoles = [userRoles]
     if (!Array.isArray(userRoles)) {
-      return { status: 403, body: { detail: "Invalid 'roles' claim" } }
+      return { status: 403, body: { detail: `Invalid '${claim}' claim` } }
     }
     const hasRole = userRoles.some((r) => allowed.has(String(r)))
     if (!hasRole) {
@@ -154,6 +186,7 @@ function requireRoles(...roles) {
 function bearerJwt(options = {}) {
   const stateKey = options.stateKey || 'jwt'
   const headerName = options.header || 'Authorization'
+  const verify = typeof options.verify === 'function' ? options.verify : null
 
   return (request, callNext) => {
     const headers = request.headers || {}
@@ -164,10 +197,18 @@ function bearerJwt(options = {}) {
     }
     const token = String(auth).slice(7).trim()
     try {
-      const parts = token.split('.')
-      if (parts.length !== 3) throw new Error('bad token')
-      const payloadB64 = parts[1] + '='.repeat((4 - (parts[1].length % 4)) % 4)
-      const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'))
+      let payload
+      if (verify) {
+        payload = verify(token)
+        if (!payload || typeof payload !== 'object') {
+          return { status: 401, body: { detail: 'Invalid token' } }
+        }
+      } else {
+        const parts = token.split('.')
+        if (parts.length !== 3) throw new Error('bad token')
+        const payloadB64 = parts[1] + '='.repeat((4 - (parts[1].length % 4)) % 4)
+        payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'))
+      }
       ensureState(request)[stateKey] = payload
       return callNext(request)
     } catch {
@@ -189,7 +230,13 @@ function router(routePath, options = {}) {
 
     const routeMiddleware = Array.isArray(options.middleware) ? [...options.middleware] : []
     if (Array.isArray(options.roles) && options.roles.length) {
-      routeMiddleware.push(requireRoles(...options.roles))
+      routeMiddleware.push(
+        requireRoles({
+          roles: options.roles,
+          claim: options.roleClaim || 'roles',
+          stateKey: options.roleStateKey || 'jwt',
+        }),
+      )
     }
 
     registry.push({
@@ -547,8 +594,12 @@ class FusionApp {
   }
 }
 
-async function run(settingsModulePath) {
-  settings.loadJson(null, null, [process.cwd()])
+async function run(options = {}) {
+  const settingsModulePath =
+    typeof options === 'string' ? options : options && options.settingsModule
+  const middleware = Array.isArray(options?.middleware) ? options.middleware : []
+
+  settings.ensureLoaded([process.cwd()])
   if (settingsModulePath) {
     const mod = await import(pathToFileUrl(settingsModulePath))
     const overlay = {}
@@ -558,13 +609,21 @@ async function run(settingsModulePath) {
     if (Object.keys(overlay).length) settings.merge(overlay)
   }
   const app = new FusionApp()
+  for (const mw of middleware) app.use(mw)
   await app.listen()
+  return app
+}
+
+function coerceParam(raw, kind = 'auto') {
+  return native.coerceParamJs(String(raw), kind)
 }
 
 function pathToFileUrl(filePath) {
   const resolved = path.resolve(filePath)
   return require('url').pathToFileURL(resolved).href
 }
+
+const route = router
 
 module.exports = {
   App: NativeApp,
@@ -573,14 +632,21 @@ module.exports = {
   FusionBaseApi,
   HTTPException,
   router,
+  route,
   apiResourceName,
   resolveRoutePath,
   configure,
   getSettings,
   settings,
+  status,
   HTTP_METHODS,
   run,
   bearerJwt,
   requireRoles,
   runMiddlewareChain,
+  coerceParam,
+  getHttpMethods: () => HTTP_METHODS,
+  apiResourceNameJs: native.apiResourceNameJs,
+  resolveRoutePathJs: native.resolveRoutePathJs,
+  coerceParamJs: native.coerceParamJs,
 }

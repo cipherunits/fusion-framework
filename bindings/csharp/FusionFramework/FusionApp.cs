@@ -1,0 +1,149 @@
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+
+namespace FusionFramework;
+
+/// <summary>Managed Fusion application — mounts registered routes and listens via fusion-ffi.</summary>
+public sealed class FusionApp : IDisposable
+{
+    readonly List<FusionMiddleware> _middleware = new();
+    readonly List<GCHandle> _pins = new();
+    IntPtr _app = IntPtr.Zero;
+    bool _disposed;
+
+    public FusionApp(FusionSettings? settings = null)
+    {
+        _app = Native.fusion_app_new();
+        if (_app == IntPtr.Zero)
+            throw new InvalidOperationException("fusion_app_new failed");
+
+        settings ??= SettingsStore.Current;
+        Native.fusion_app_set_settings(_app, settings.Handle);
+    }
+
+    public FusionApp Use(FusionMiddleware middleware)
+    {
+        _middleware.Add(middleware);
+        return this;
+    }
+
+    /// <summary>Wire all registered <see cref="Route"/> entries into the native engine.</summary>
+    public void Mount()
+    {
+        Middleware.SetActiveGlobal(_middleware);
+        var httpMethods = new[] { "get", "post", "put", "patch", "delete", "head", "options" };
+
+        foreach (var entry in Route.Snapshot())
+        {
+            foreach (var methodName in httpMethods)
+            {
+                var mi = entry.ApiClass.GetMethod(
+                    methodName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
+                if (mi is null) continue;
+
+                var slot = new RouteSlot
+                {
+                    Entry = entry,
+                    Method = methodName.ToUpperInvariant(),
+                    Handler = mi,
+                    Global = _middleware.ToList(),
+                };
+
+                Native.FusionHandlerFn cb = (userData, method, path, headersJson, body, paramsJson, queryJson, stateJson) =>
+                {
+                    try
+                    {
+                        var handle = GCHandle.FromIntPtr(userData);
+                        var s = (RouteSlot)handle.Target!;
+                        var req = new FusionRequest
+                        {
+                            Method = Native.PtrToUtf8(method) ?? s.Method,
+                            Path = Native.PtrToUtf8(path) ?? "",
+                            Body = Native.PtrToUtf8(body) ?? "",
+                            Headers = JsonUtil.ParseStringMap(Native.PtrToUtf8(headersJson)),
+                            Params = JsonUtil.ParseStringMap(Native.PtrToUtf8(paramsJson)),
+                            Query = JsonUtil.ParseStringMap(Native.PtrToUtf8(queryJson)),
+                            State = JsonUtil.ParseState(Native.PtrToUtf8(stateJson)),
+                        };
+
+                        var chain = s.Global.Concat(s.Entry.Middleware).ToList();
+                        object? result;
+                        try
+                        {
+                            result = Middleware.RunChain(req, chain, r =>
+                            {
+                                var instance = (FusionBaseApi)Activator.CreateInstance(s.Entry.ApiClass)!;
+                                instance.Request = r;
+                                return s.Handler.Invoke(instance, null);
+                            });
+                        }
+                        catch (TargetInvocationException tie) when (tie.InnerException is HttpException hex)
+                        {
+                            result = hex.ToResponse();
+                        }
+                        catch (HttpException hex)
+                        {
+                            result = hex.ToResponse();
+                        }
+
+                        var json = JsonUtil.SerializeResponse(result);
+                        return Native.fusion_string_dup(json);
+                    }
+                    catch (Exception ex)
+                    {
+                        var err = JsonSerializer.Serialize(new
+                        {
+                            status = 500,
+                            body = new { detail = ex.Message },
+                        });
+                        return Native.fusion_string_dup(err);
+                    }
+                };
+
+                // Keep delegate + slot alive for the lifetime of the app
+                slot.KeptAlive = cb;
+                var gch = GCHandle.Alloc(slot);
+                _pins.Add(gch);
+                _pins.Add(GCHandle.Alloc(cb));
+
+                if (Native.fusion_app_route(_app, slot.Method, entry.Path, cb, GCHandle.ToIntPtr(gch)) != 0)
+                    throw new InvalidOperationException($"Failed to register {slot.Method} {entry.Path}");
+            }
+        }
+    }
+
+    public void Listen(string? host = null, ushort port = 0)
+    {
+        Mount();
+        var settings = SettingsStore.Current;
+        host ??= settings.Host;
+        if (port == 0) port = settings.Port;
+
+        var code = Native.fusion_app_listen(_app, host, port);
+        // listen consumes the native app
+        _app = IntPtr.Zero;
+        if (code != 0)
+            throw new InvalidOperationException("fusion_app_listen failed");
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (_app != IntPtr.Zero)
+        {
+            Native.fusion_app_free(_app);
+            _app = IntPtr.Zero;
+        }
+        foreach (var pin in _pins)
+        {
+            if (pin.IsAllocated) pin.Free();
+        }
+        _pins.Clear();
+        GC.SuppressFinalize(this);
+    }
+
+    ~FusionApp() => Dispose();
+}

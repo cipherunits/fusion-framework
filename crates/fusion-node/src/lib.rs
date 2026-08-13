@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
     api_resource_name, coerce_param, param_kind_from_name, resolve_route_path,
-    response_from_value, HTTP_METHODS,
+    response_from_value, HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
@@ -387,4 +387,21 @@ pub fn resolve_route_path_js(template: String, class_name: String) -> String {
 pub fn coerce_param_js(env: Env, raw: String, kind: Option<String>) -> Result<Unknown> {
     let value = coerce_param(&raw, param_kind_from_name(kind.as_deref().unwrap_or("auto")));
     json_to_js(&env, &value)
+}
+
+#[napi(object)]
+pub struct HttpStatusCode {
+    pub name: String,
+    pub code: u16,
+}
+
+#[napi]
+pub fn get_http_status_codes() -> Vec<HttpStatusCode> {
+    HTTP_STATUS_CODES
+        .iter()
+        .map(|(name, code)| HttpStatusCode {
+            name: (*name).to_string(),
+            code: *code,
+        })
+        .collect()
 }
