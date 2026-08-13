@@ -1,12 +1,44 @@
 {
   "name": "fusion-framework",
   "version": "1.1.2",
-  "description": "Class-based Node interface over the fusion-core HTTP engine",
+  "description": "Build high-performance class-based HTTP APIs in Node.js on a shared Rust core — routing, middleware, JWT auth, and TypeScript types",
+  "keywords": [
+    "http",
+    "framework",
+    "nodejs",
+    "node",
+    "rust",
+    "napi",
+    "http-server",
+    "web-framework",
+    "rest-api",
+    "api",
+    "routing",
+    "middleware",
+    "jwt",
+    "typescript",
+    "openapi",
+    "swagger",
+    "hyper",
+    "fusion"
+  ],
+  "homepage": "https://fusion.cipherunit.xyz/",
+  "bugs": {
+    "url": "https://github.com/cipherunits/fusion-framework/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cipherunits/fusion-framework.git",
+    "directory": "crates/fusion-node"
+  },
+  "author": "CipherUnits <cipherunit.dev@gmail.com>",
+  "license": "MIT",
   "main": "index.js",
   "types": "index.d.ts",
   "files": [
     "index.js",
     "index.d.ts",
+    "README.md",
     "*.node"
   ],
   "napi": {
@@ -30,9 +62,8 @@
     "registry": "https://registry.npmjs.org/",
     "provenance": true
   },
-  "license": "MIT",
   "engines": {
-    "node": ">= 16"
+    "node": ">=16"
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4"

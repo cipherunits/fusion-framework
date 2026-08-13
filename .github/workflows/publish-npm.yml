@@ -33,12 +33,6 @@ jobs:
           - host: windows-latest
             target: x86_64-pc-windows-msvc
             build: npx napi build --platform --release --target x86_64-pc-windows-msvc
-          - host: macos-latest
-            target: aarch64-apple-darwin
-            build: npx napi build --platform --release --target aarch64-apple-darwin
-          - host: macos-13
-            target: x86_64-apple-darwin
-            build: npx napi build --platform --release --target x86_64-apple-darwin
     steps:
       - uses: actions/checkout@v4
 
