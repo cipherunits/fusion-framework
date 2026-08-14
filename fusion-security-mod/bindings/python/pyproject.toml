@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "fusion_security_mod"
+version = "0.1.0"
+description = "Fusion module security (Rust + PyO3)"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.maturin]
+manifest-path = "Cargo.toml"
+module-name = "fusion_security_mod._native"
+python-source = "python"
+features = ["pyo3/extension-module"]
