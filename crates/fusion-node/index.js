@@ -134,7 +134,7 @@ header.fingerprint = () =>
     : {
         'X-Powered-By': 'Fusion Framework',
         'X-Framework': 'Fusion',
-        'X-Fusion-Version': '1.2.1',
+        ['X-Fusion-Version']: '1.2.2',
       }
 
 function isThenable(value) {

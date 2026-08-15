@@ -18,3 +18,7 @@
 *.node binary
 *.whl binary
 
+# Keep Makefile out of GitHub language stats
+Makefile linguist-detectable=false
+makefile linguist-detectable=false
+GNUmakefile linguist-detectable=false
