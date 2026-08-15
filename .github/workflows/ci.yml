@@ -81,3 +81,17 @@ jobs:
         shell: bash
         run: |
           node -e "const f=require('./index.js'); if(!f.FusionApp||!f.status) throw new Error('smoke failed'); console.log('ok', f.status.HTTP_SUCCESS)"
+
+  csharp:
+    name: C# package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build fusion-ffi
+        run: cargo build -p fusion-ffi --release
+      - name: Build FusionFramework
+        run: dotnet build -c Release bindings/csharp/FusionFramework/FusionFramework.csproj

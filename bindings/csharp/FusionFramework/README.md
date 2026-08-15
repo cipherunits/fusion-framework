@@ -15,6 +15,13 @@ No full OpenAPI/Swagger in this v1 — runnable HTTP APIs only.
 Requires .NET 8+ (this package targets `net10.0` by default; retarget as needed).
 
 ```bash
+dotnet add package FusionFramework
+```
+
+Native `fusion-ffi` is packed under `runtimes/<rid>/native/` in the NuGet package.
+For local development from this repo:
+
+```bash
 # from repo root
 cargo build -p fusion-ffi
 # optional: export FUSION_FFI_PATH=$PWD/target/debug/libfusion_ffi.so

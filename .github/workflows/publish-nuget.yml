@@ -1,0 +1,158 @@
+name: Publish NuGet
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# Trusted Publishing via OIDC — no NUGET_API_KEY secret needed.
+# On nuget.org: Trusted Publishing → this repo + workflow file `publish-nuget.yml`
+# (optional GitHub Environment name: nuget). Username is nuget.org profile name,
+# not an API token: set repo variable NUGET_USER or it falls back to GitHub owner.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-nuget-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: fusion-ffi (${{ matrix.settings.rid }})
+    runs-on: ${{ matrix.settings.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            rid: linux-x64
+            artifact: libfusion_ffi.so
+          - host: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            rid: linux-arm64
+            artifact: libfusion_ffi.so
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+            rid: win-x64
+            artifact: fusion_ffi.dll
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            rid: osx-arm64
+            artifact: libfusion_ffi.dylib
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          key: ffi-${{ matrix.settings.target }}
+
+      - name: Build fusion-ffi
+        run: cargo build -p fusion-ffi --release --target ${{ matrix.settings.target }}
+
+      - name: Stage native lib
+        shell: bash
+        run: |
+          mkdir -p native
+          SRC="target/${{ matrix.settings.target }}/release/${{ matrix.settings.artifact }}"
+          if [ ! -f "$SRC" ]; then
+            echo "missing $SRC" >&2
+            ls -la "target/${{ matrix.settings.target }}/release" || true
+            exit 1
+          fi
+          cp "$SRC" "native/${{ matrix.settings.artifact }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffi-${{ matrix.settings.rid }}
+          path: native/${{ matrix.settings.artifact }}
+          if-no-files-found: error
+
+  publish:
+    name: Pack and publish (Trusted Publishing)
+    needs: native
+    runs-on: ubuntu-latest
+    environment: nuget
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Download native libs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ffi-*
+          path: bindings/csharp/FusionFramework/runtimes
+
+      - name: Layout runtimes/
+        shell: bash
+        working-directory: bindings/csharp/FusionFramework
+        run: |
+          set -euo pipefail
+          # artifacts land as runtimes/ffi-<rid>/<lib>
+          mkdir -p staged
+          for dir in runtimes/ffi-*; do
+            [ -d "$dir" ] || continue
+            rid="${dir#runtimes/ffi-}"
+            mkdir -p "staged/${rid}/native"
+            cp -v "$dir"/* "staged/${rid}/native/"
+          done
+          rm -rf runtimes
+          mv staged runtimes
+          find runtimes -type f
+
+      - name: Sync package version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        working-directory: bindings/csharp/FusionFramework
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${TAG#.}"
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version tag after strip: '$TAG' (from $GITHUB_REF_NAME)" >&2
+            exit 1
+          fi
+          sed -i "s|<Version>.*</Version>|<Version>${TAG}</Version>|" FusionFramework.csproj
+
+      - name: Pack
+        working-directory: bindings/csharp/FusionFramework
+        run: dotnet pack -c Release -o ../../../nupkg
+
+      - name: List packages
+        run: ls -lah nupkg
+
+      - name: Resolve nuget.org username
+        id: nuget_user
+        shell: bash
+        run: |
+          if [ -n "${{ vars.NUGET_USER }}" ]; then
+            echo "user=${{ vars.NUGET_USER }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "user=${{ github.repository_owner }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ steps.nuget_user.outputs.user }}
+
+      - name: Push to nuget.org
+        run: |
+          dotnet nuget push nupkg/*.nupkg \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

@@ -1,9 +1,0 @@
-{
-  "name": "fusion-security-mod",
-  "version": "0.1.0",
-  "description": "Fusion module security (Rust + N-API)",
-  "main": "js/index.js",
-  "scripts": {
-    "build": "npm run build --prefix bindings/node"
-  }
-}

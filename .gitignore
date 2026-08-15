@@ -37,3 +37,7 @@ yarn-error.log*
 build/
 coverage/
 .nyc_output/
+
+## NuGet
+nupkg/
+bindings/csharp/**/runtimes/

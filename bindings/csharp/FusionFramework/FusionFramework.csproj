@@ -6,11 +6,24 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>FusionFramework</RootNamespace>
     <AssemblyName>FusionFramework</AssemblyName>
+    <PackageId>FusionFramework</PackageId>
     <Version>1.2.1</Version>
+    <Authors>CipherUnits</Authors>
+    <Company>CipherUnits</Company>
     <Description>Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core</Description>
     <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+    <PackageProjectUrl>https://fusion.cipherunit.xyz/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/cipherunits/fusion-framework</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>fusion;http;framework;aspnet;csharp;rust</PackageTags>
+    <IsPackable>true</IsPackable>
     <NuGetAudit>false</NuGetAudit>
     <!-- Prefer installed targeting packs over downloading *.App.Ref from NuGet. -->
     <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <Content Include="runtimes/**" Pack="true" PackagePath="runtimes" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
