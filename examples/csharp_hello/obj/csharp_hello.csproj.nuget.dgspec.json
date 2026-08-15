@@ -5,7 +5,7 @@
   },
   "projects": {
     "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj": {
-      "version": "1.2.1",
+      "version": "1.2.2",
       "restore": {
         "projectUniqueName": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj",
         "projectName": "FusionFramework",
