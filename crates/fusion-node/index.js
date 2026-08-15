@@ -170,7 +170,7 @@ function frameworkHeaders() {
 
 class FusionBaseApi {
   constructor(request) {
-    this.request = request
+    this.request = request && typeof request === 'object' ? request : emptyRequest()
   }
 
   get method() {
@@ -219,7 +219,39 @@ function resolveRoutePath(routePath, ApiClass) {
   return native.resolveRoutePathJs(routePath, ApiClass.name)
 }
 
+function emptyRequest() {
+  return {
+    method: '',
+    path: '',
+    body: '',
+    headers: {},
+    params: {},
+    query: {},
+    state: {},
+  }
+}
+
+/**
+ * N-API threadsafe callbacks may be `(request)` (Fatal) or `(err, request)` (CalleeHandled).
+ * Always return a real request object so middleware never sees `null`.
+ */
+function nativeRequestArg(errOrRequest, maybeRequest) {
+  if (maybeRequest != null && typeof maybeRequest === 'object') {
+    return maybeRequest
+  }
+  if (errOrRequest instanceof Error) {
+    throw errOrRequest
+  }
+  if (errOrRequest != null && typeof errOrRequest === 'object') {
+    return errOrRequest
+  }
+  return emptyRequest()
+}
+
 function ensureState(request) {
+  if (!request || typeof request !== 'object') {
+    return {}
+  }
   if (!request.state || typeof request.state !== 'object') {
     request.state = {}
   }
@@ -604,11 +636,12 @@ class FusionApp {
     for (const { path: routePath, ApiClass, middleware: routeMiddleware = [] } of registry) {
       for (const methodName of HTTP_METHODS) {
         if (!definesMethod(ApiClass, methodName)) continue
-        this.engine.route(methodName.toUpperCase(), routePath, async (request) => {
+        this.engine.route(methodName.toUpperCase(), routePath, (errOrRequest, maybeRequest) => {
+          const request = nativeRequestArg(errOrRequest, maybeRequest)
           const chain = [...activeGlobalMiddleware, ...routeMiddleware]
           const handler = async (req) => {
             try {
-              const instance = new ApiClass(req)
+              const instance = new ApiClass(req || emptyRequest())
               const fn = instance[methodName]
               return await Promise.resolve(fn.call(instance))
             } catch (err) {
@@ -673,12 +706,16 @@ class FusionApp {
         }
       }
 
-      this.engine.route('GET', `${prefix}/openapi.json`, async () => openapi)
-      this.engine.route('GET', prefix, async () => ({
+      const uiEnvelope = () => ({
         status: 200,
         body: swaggerUiHtml(swagger, `${prefix}/openapi.json`),
         headers: { 'content-type': 'text/html' },
-      }))
+      })
+      this.engine.route('GET', `${prefix}/openapi.json`, () => openapi)
+      this.engine.route('GET', prefix, uiEnvelope)
+      if (prefix !== '/') {
+        this.engine.route('GET', `${prefix}/`, uiEnvelope)
+      }
     }
 
     this.mounted = true

@@ -247,7 +247,8 @@ struct PlainRequest {
 }
 
 struct ReturnJsHandler {
-    tsfn: ThreadsafeFunction<PlainRequest, ErrorStrategy::CalleeHandled>,
+    // Fatal: JS is `(request) => ...`, not Node's `(err, request) => ...`.
+    tsfn: ThreadsafeFunction<PlainRequest, ErrorStrategy::Fatal>,
 }
 
 impl Handler for ReturnJsHandler {
@@ -265,7 +266,7 @@ impl Handler for ReturnJsHandler {
             };
 
             // call_async awaits JS Promises; JsJson converts on the Node thread (Send).
-            match tsfn.call_async::<JsJson>(Ok(plain)).await {
+            match tsfn.call_async::<JsJson>(plain).await {
                 Ok(JsJson(json)) => response_from_value(json),
                 Err(err) => {
                     let message = err.to_string();
@@ -286,7 +287,7 @@ impl Handler for ReturnJsHandler {
 
 fn make_tsfn(
     handler: JsFunction,
-) -> Result<ThreadsafeFunction<PlainRequest, ErrorStrategy::CalleeHandled>> {
+) -> Result<ThreadsafeFunction<PlainRequest, ErrorStrategy::Fatal>> {
     handler.create_threadsafe_function(0, |ctx: ThreadSafeCallContext<PlainRequest>| {
         let PlainRequest {
             method,
