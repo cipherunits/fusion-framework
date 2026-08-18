@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+mod settings;
+
 use std::sync::Mutex;
 
 use fusion_core::{
-    App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
+    App as CoreApp, Handler, HandlerFuture, Request, Response,
     api_resource_name, attachment, cache_control, coerce_param, content_type, download,
     fingerprint_headers, inline, location, param_kind_from_name, resolve_route_path,
     response_from_value, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES,
@@ -12,6 +13,8 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, Threadsafe
 use napi::{JsFunction, ValueType};
 use napi_derive::napi;
 use serde_json::{Map, Number, Value as JsonValue};
+
+pub use settings::Settings;
 
 /// JSON extracted on the Node thread so the async result is `Send`.
 struct JsJson(JsonValue);
@@ -25,7 +28,7 @@ impl FromNapiValue for JsJson {
 
 // ─── JS ↔ JSON bridge ────────────────────────────────────────────────────────
 
-fn js_to_json(value: Unknown) -> Result<JsonValue> {
+pub(crate) fn js_to_json(value: Unknown) -> Result<JsonValue> {
     match value.get_type()? {
         ValueType::Undefined | ValueType::Null => Ok(JsonValue::Null),
         ValueType::Boolean => Ok(JsonValue::Bool(value.coerce_to_bool()?.get_value()?)),
@@ -74,7 +77,7 @@ fn js_to_json(value: Unknown) -> Result<JsonValue> {
     }
 }
 
-fn json_to_js(env: &Env, value: &JsonValue) -> Result<Unknown> {
+pub(crate) fn json_to_js(env: &Env, value: &JsonValue) -> Result<Unknown> {
     match value {
         JsonValue::Null => Ok(env.get_null()?.into_unknown()),
         JsonValue::Bool(b) => Ok(env.get_boolean(*b)?.into_unknown()),
@@ -102,135 +105,6 @@ fn json_to_js(env: &Env, value: &JsonValue) -> Result<Unknown> {
             }
             Ok(obj.into_unknown())
         }
-    }
-}
-
-// ─── Settings ────────────────────────────────────────────────────────────────
-
-#[napi]
-pub struct Settings {
-    inner: Mutex<CoreSettings>,
-}
-
-#[napi]
-impl Settings {
-    #[napi(constructor)]
-    pub fn new() -> Self {
-        Self {
-            inner: Mutex::new(CoreSettings::new()),
-        }
-    }
-
-    #[napi]
-    pub fn load_json(
-        &self,
-        path: Option<String>,
-        env_name: Option<String>,
-        extra_roots: Option<Vec<String>>,
-    ) -> Result<()> {
-        let roots: Vec<PathBuf> = extra_roots
-            .unwrap_or_default()
-            .into_iter()
-            .map(PathBuf::from)
-            .collect();
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        guard
-            .load_json(
-                path.as_deref().map(std::path::Path::new),
-                env_name.as_deref(),
-                &roots,
-            )
-            .map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(())
-    }
-
-    #[napi]
-    pub fn ensure_loaded(&self, extra_roots: Option<Vec<String>>) -> Result<()> {
-        let roots: Vec<PathBuf> = extra_roots
-            .unwrap_or_default()
-            .into_iter()
-            .map(PathBuf::from)
-            .collect();
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        guard
-            .ensure_loaded(&roots)
-            .map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(())
-    }
-
-    #[napi]
-    pub fn merge(&self, env: Env, values: Unknown) -> Result<()> {
-        let JsonValue::Object(map) = js_to_json(values)? else {
-            return Err(Error::from_reason("merge expects an object"));
-        };
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        guard.merge_map(map);
-        let _ = env;
-        Ok(())
-    }
-
-    #[napi]
-    pub fn get(&self, env: Env, key: String, default: Option<Unknown>) -> Result<Unknown> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        guard
-            .ensure_loaded(&[])
-            .map_err(|e| Error::from_reason(e.to_string()))?;
-        match guard.get(&key) {
-            Some(v) => json_to_js(&env, &v),
-            None => Ok(default.unwrap_or_else(|| env.get_undefined().unwrap().into_unknown())),
-        }
-    }
-
-    #[napi(getter)]
-    pub fn host(&self) -> Result<String> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        let _ = guard.ensure_loaded(&[]);
-        Ok(guard.host())
-    }
-
-    #[napi(getter)]
-    pub fn port(&self) -> Result<u32> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        let _ = guard.ensure_loaded(&[]);
-        Ok(guard.port() as u32)
-    }
-
-    #[napi(getter)]
-    pub fn debug(&self) -> Result<bool> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        let _ = guard.ensure_loaded(&[]);
-        Ok(guard.debug())
-    }
-
-    #[napi(getter)]
-    pub fn env(&self) -> Result<String> {
-        let mut guard = self
-            .inner
-            .lock()
-            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
-        let _ = guard.ensure_loaded(&[]);
-        Ok(guard.env().to_string())
     }
 }
 
