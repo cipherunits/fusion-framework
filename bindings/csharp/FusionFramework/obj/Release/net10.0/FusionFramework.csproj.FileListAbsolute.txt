@@ -1,0 +1,12 @@
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/FusionFramework.GeneratedMSBuildEditorConfig.editorconfig
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/FusionFramework.AssemblyInfoInputs.cache
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/FusionFramework.AssemblyInfo.cs
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/FusionFramework.csproj.CoreCompileInputs.cache
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/FusionFramework.sourcelink.json
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/bin/Release/net10.0/FusionFramework.deps.json
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/bin/Release/net10.0/FusionFramework.dll
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/bin/Release/net10.0/FusionFramework.pdb
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/FusionFramework.dll
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/refint/FusionFramework.dll
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/FusionFramework.pdb
+/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/Release/net10.0/ref/FusionFramework.dll

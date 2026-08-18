@@ -11,7 +11,7 @@ using System;
 using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("CipherUnits")]
-[assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
+[assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.2.2.0")]
 [assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.2.2+a3910b61aa02175d7d670545dc38f19bc081109a")]

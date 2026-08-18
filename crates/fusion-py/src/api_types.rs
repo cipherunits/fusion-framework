@@ -239,6 +239,54 @@ struct RegisteredRoute {
     method_specs: HashMap<String, Vec<ParamSpec>>,
     swagger: SwaggerMeta,
     middleware: Vec<Py<PyAny>>,
+    /// Normalized route version (`v1`), if the `@route(..., version=)` was set.
+    version: Option<String>,
+}
+
+fn normalize_api_version(version: Option<String>) -> Option<String> {
+    version.and_then(|raw| {
+        let trimmed = raw.trim().trim_matches('/').to_string();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
+
+fn route_matches_version_filter(route_version: Option<&str>, filter: Option<&str>) -> bool {
+    match filter {
+        None => true,
+        Some(label) if label.is_empty() || label.eq_ignore_ascii_case("default") => {
+            route_version.map(str::is_empty).unwrap_or(true)
+        }
+        Some(label) => route_version
+            .map(|v| v.eq_ignore_ascii_case(label))
+            .unwrap_or(false),
+    }
+}
+
+/// Unique `@route(version=...)` values in registration order.
+pub fn route_versions() -> Vec<String> {
+    let Ok(guard) = REGISTRY.lock() else {
+        return Vec::new();
+    };
+    let mut versions = Vec::new();
+    for route in guard.iter() {
+        if let Some(version) = route.version.as_ref() {
+            if !versions.iter().any(|existing| existing == version) {
+                versions.push(version.clone());
+            }
+        }
+    }
+    versions
+}
+
+pub fn has_unversioned_routes() -> bool {
+    let Ok(guard) = REGISTRY.lock() else {
+        return false;
+    };
+    guard.iter().any(|route| route.version.is_none())
 }
 
 static REGISTRY: Mutex<Vec<RegisteredRoute>> = Mutex::new(Vec::new());
@@ -262,14 +310,12 @@ pub fn register_route(
     let py = api_cls.py();
 
     let class_name: String = api_cls.name()?.extract()?;
+    let version = normalize_api_version(version);
     let mut resolved = resolve_route_path(template, &class_name);
-    if let Some(version) = version {
-        let v = version.trim().trim_matches('/');
-        if !v.is_empty() {
-            // Prefix the resolved api path with version: `v1/api/` style.
-            let trimmed = resolved.trim_start_matches('/');
-            resolved = format!("{}/{}", v, trimmed);
-        }
+    if let Some(v) = version.as_deref() {
+        // Prefix the resolved api path with version: `v1/api/` style.
+        let trimmed = resolved.trim_start_matches('/');
+        resolved = format!("{}/{}", v, trimmed);
     }
 
     let mut method_specs = HashMap::new();
@@ -302,6 +348,7 @@ pub fn register_route(
                 deprecated,
             },
             middleware,
+            version,
         });
 
     Ok(resolved)
@@ -668,6 +715,15 @@ fn annotation_kind(py: Python<'_>, annotation: &Bound<'_, PyAny>) -> PyResult<Pa
 }
 
 pub fn openapi_spec() -> serde_json::Value {
+    openapi_spec_for(None)
+}
+
+/// Build an OpenAPI document.
+///
+/// - `None` — every registered route
+/// - `Some("default")` / `Some("")` — routes without a version
+/// - `Some("v1")` — only that API version
+pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
     use serde_json::{json, Map, Value};
     const OPENAPI_VERSION: &str = "3.0.3";
 
@@ -680,6 +736,9 @@ pub fn openapi_spec() -> serde_json::Value {
     let mut paths: Map<String, Value> = Map::new();
 
     for r in routes_guard.iter() {
+        if !route_matches_version_filter(r.version.as_deref(), version) {
+            continue;
+        }
         let resolved_path = if r.path.starts_with('/') {
             r.path.clone()
         } else {

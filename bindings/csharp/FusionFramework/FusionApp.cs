@@ -117,6 +117,32 @@ public sealed class FusionApp : IDisposable
                     throw new InvalidOperationException($"Failed to register {slot.Method} {entry.Path}");
             }
         }
+
+        SwaggerDocs.Mount(this, SettingsStore.Current);
+    }
+
+    internal void AddRawRoute(string method, string path, Func<object?> handler)
+    {
+        Native.FusionHandlerFn cb = (_, _, _, _, _, _, _, _) =>
+        {
+            try
+            {
+                var json = JsonUtil.SerializeResponse(handler());
+                return Native.fusion_string_dup(json);
+            }
+            catch (Exception ex)
+            {
+                var err = JsonSerializer.Serialize(new
+                {
+                    status = 500,
+                    body = new { detail = ex.Message },
+                });
+                return Native.fusion_string_dup(err);
+            }
+        };
+        _pins.Add(GCHandle.Alloc(cb));
+        if (Native.fusion_app_route(_app, method, path, cb, IntPtr.Zero) != 0)
+            throw new InvalidOperationException($"Failed to register {method} {path}");
     }
 
     public void Listen(string? host = null, ushort port = 0)

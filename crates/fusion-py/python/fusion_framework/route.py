@@ -39,6 +39,8 @@ def route(
 
     ``middleware`` — callables ``(request, call_next) -> response | call_next(...)``.
     ``roles`` — shorthand that appends a ``require_roles(...)`` route middleware.
+    ``version`` — API prefix such as ``v1`` (path becomes ``/v1/...``). Each
+    version gets its own OpenAPI spec and appears in the Swagger navbar.
     """
 
     def decorator(cls: Type[FusionBaseApi]) -> Type[FusionBaseApi]:

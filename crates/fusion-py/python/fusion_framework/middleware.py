@@ -241,13 +241,13 @@ def framework_headers() -> Middleware:
                     hdr, "FRAMEWORK_POWERED_BY", "Fusion Framework"
                 ),
                 getattr(hdr, "X_FRAMEWORK", "X-Framework"): getattr(hdr, "FRAMEWORK_ID", "Fusion"),
-                getattr(hdr, "X_FUSION_VERSION", "X-Fusion-Version"): "1.2.2",
+                getattr(hdr, "X_FUSION_VERSION", "X-Fusion-Version"): "1.2.3",
             }
         except Exception:
             extra = {
                 "X-Powered-By": "Fusion Framework",
                 "X-Framework": "Fusion",
-                "X-Fusion-Version": "1.2.2",
+                "X-Fusion-Version": "1.2.3",
             }
 
     def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:

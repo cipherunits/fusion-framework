@@ -1,8 +1,8 @@
 # Fusion Framework (C#)
 
-Minimal managed bindings over the Rust core via `fusion-ffi`. DX mirrors Python/Node: `FusionApp`, `[Route]`, middleware, `Status`, `Settings`.
+Minimal managed bindings over the Rust core via `fusion-ffi`. DX mirrors Python/Node: `FusionApp`, `[Route]`, middleware, `Status`, `Settings`, Swagger.
 
-No full OpenAPI/Swagger in this v1 — runnable HTTP APIs only.
+`/swagger` is on by default. Route `Version` values (for example `v1`) each get their own OpenAPI spec and appear in the Swagger navbar.
 
 ## Links
 
@@ -36,7 +36,7 @@ dotnet build bindings/csharp/FusionFramework
 ```csharp
 using FusionFramework;
 
-[Route("api/[module]")]
+[Route("api/[module]", Version = "v1", Tags = new[] { "products" })]
 public class ProductModule : FusionBaseApi
 {
     public object Get() =>

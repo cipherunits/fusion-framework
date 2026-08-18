@@ -26,6 +26,11 @@ internal sealed class RouteEntry
     public required string Path { get; init; }
     public required Type ApiClass { get; init; }
     public List<FusionMiddleware> Middleware { get; init; } = new();
+    public string? Version { get; init; }
+    public string[] Tags { get; init; } = Array.Empty<string>();
+    public string? Desc { get; init; }
+    public string? Title { get; init; }
+    public bool Deprecated { get; init; }
 }
 
 /// <summary>Route registry — mirrors Python <c>route</c> / Node <c>router</c>.</summary>
@@ -47,15 +52,19 @@ public static class Route
         IEnumerable<string>? roles = null,
         string? version = null,
         string roleClaim = "roles",
-        string roleStateKey = "jwt")
+        string roleStateKey = "jwt",
+        IEnumerable<string>? tags = null,
+        string? desc = null,
+        string? title = null,
+        bool deprecated = false)
     {
         if (!typeof(FusionBaseApi).IsAssignableFrom(apiClass))
             throw new ArgumentException($"{apiClass.Name} must extend FusionBaseApi");
 
         var resolved = ResolvePath(path, apiClass.Name);
-        var v = (version ?? "").Trim();
+        var v = (version ?? "").Trim().Trim('/');
         if (v.Length > 0)
-            resolved = $"{v.TrimStart('/')}/{resolved.TrimStart('/')}";
+            resolved = $"{v}/{resolved.TrimStart('/')}";
 
         var chain = middleware?.ToList() ?? new List<FusionMiddleware>();
         if (roles != null)
@@ -72,6 +81,11 @@ public static class Route
                 Path = resolved.StartsWith('/') ? resolved : "/" + resolved,
                 ApiClass = apiClass,
                 Middleware = chain,
+                Version = v.Length > 0 ? v : null,
+                Tags = tags?.ToArray() ?? Array.Empty<string>(),
+                Desc = desc,
+                Title = title,
+                Deprecated = deprecated,
             });
         }
         return apiClass;
@@ -87,7 +101,11 @@ public static class Route
             roles: attr.Roles,
             version: attr.Version,
             roleClaim: attr.RoleClaim,
-            roleStateKey: attr.RoleStateKey);
+            roleStateKey: attr.RoleStateKey,
+            tags: attr.Tags,
+            desc: attr.Desc,
+            title: attr.Title,
+            deprecated: attr.Deprecated);
     }
 
     public static void RegisterAll(Assembly assembly)
@@ -106,7 +124,11 @@ public static class Route
                 roles: attr.Roles,
                 version: attr.Version,
                 roleClaim: attr.RoleClaim,
-                roleStateKey: attr.RoleStateKey);
+                roleStateKey: attr.RoleStateKey,
+                tags: attr.Tags,
+                desc: attr.Desc,
+                title: attr.Title,
+                deprecated: attr.Deprecated);
         }
     }
 

@@ -134,7 +134,7 @@ header.fingerprint = () =>
     : {
         'X-Powered-By': 'Fusion Framework',
         'X-Framework': 'Fusion',
-        ['X-Fusion-Version']: '1.2.2',
+        ['X-Fusion-Version']: '1.2.3',
       }
 
 function isThenable(value) {
@@ -487,7 +487,9 @@ function readSwaggerSettings() {
   const navbar = {
     enabled: truthyEnabled(navbarRaw.enabled, true),
     showUrlInput: truthyEnabled(navbarRaw.showUrlInput, true),
+    showUrlInputSet: Object.prototype.hasOwnProperty.call(navbarRaw, 'showUrlInput'),
     urls: Array.isArray(navbarRaw.urls) ? navbarRaw.urls : null,
+    urlsSet: Array.isArray(navbarRaw.urls),
   }
 
   const ui = {
@@ -532,6 +534,60 @@ function readSwaggerSettings() {
   }
 }
 
+const UNVERSIONED_SWAGGER_NAME = 'default'
+
+function normalizeVersionLabel(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+}
+
+function collectRouteVersions() {
+  const versions = []
+  let hasUnversioned = false
+  for (const item of registry) {
+    const version = normalizeVersionLabel(item.version_prefix)
+    if (!version) {
+      hasUnversioned = true
+      continue
+    }
+    if (!versions.includes(version)) versions.push(version)
+  }
+  return { versions, hasUnversioned }
+}
+
+function swaggerVersionUrls(prefix) {
+  const { versions, hasUnversioned } = collectRouteVersions()
+  const urls = versions.map((label) => ({
+    url: `${prefix}/${label}/openapi.json`,
+    name: label,
+  }))
+  if (hasUnversioned && urls.length) {
+    urls.push({
+      url: `${prefix}/${UNVERSIONED_SWAGGER_NAME}/openapi.json`,
+      name: UNVERSIONED_SWAGGER_NAME,
+    })
+  }
+  return urls
+}
+
+function applyVersionNavbar(swagger) {
+  const autoUrls = swaggerVersionUrls(swagger.path)
+  if (!swagger.navbar.urlsSet && autoUrls.length) {
+    swagger.navbar.urls = autoUrls
+    if (!swagger.navbar.showUrlInputSet) swagger.navbar.showUrlInput = false
+  }
+  return autoUrls.map((item) => item.name)
+}
+
+function routeMatchesVersion(item, filter) {
+  const version = normalizeVersionLabel(item.version_prefix)
+  if (filter == null) return true
+  const label = normalizeVersionLabel(filter)
+  if (!label || label.toLowerCase() === UNVERSIONED_SWAGGER_NAME) return !version
+  return version.toLowerCase() === label.toLowerCase()
+}
+
 function applySwaggerOpenApi(openapi, swagger) {
   openapi.info = { ...asObject(openapi.info), ...swagger.info }
   if (swagger.servers?.length) openapi.servers = swagger.servers
@@ -546,7 +602,66 @@ function applySwaggerOpenApi(openapi, swagger) {
   return openapi
 }
 
-function swaggerUiHtml(swagger, openapiUrl) {
+function fillOpenApiPaths(openapi, versionFilter = null) {
+  const parsePathParams = (pattern) => {
+    return String(pattern)
+      .split('/')
+      .filter((seg) => (seg.startsWith('{') && seg.endsWith('}')) || (seg.startsWith('[') && seg.endsWith(']')))
+      .map((seg) => seg.slice(1, -1))
+  }
+
+  for (const item of registry) {
+    if (!routeMatchesVersion(item, versionFilter)) continue
+    const { path: p, ApiClass, swagger: routeSwagger } = item
+    const pathParams = parsePathParams(p)
+    const resolvedPath = p.startsWith('/') ? p : `/${p}`
+
+    if (!openapi.paths[resolvedPath]) openapi.paths[resolvedPath] = {}
+
+    for (const methodName of HTTP_METHODS) {
+      if (!definesMethod(ApiClass, methodName)) continue
+
+      const methodUpper = String(methodName).toUpperCase()
+      const methodLower = String(methodName).toLowerCase()
+
+      const params = pathParams.map((name) => ({
+        name,
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+      }))
+
+      openapi.paths[resolvedPath][methodLower] = {
+        tags: routeSwagger?.tags?.length ? routeSwagger.tags : [],
+        summary: routeSwagger?.title ?? `${ApiClass.name}.${methodUpper}`,
+        description: routeSwagger?.description ?? '',
+        deprecated: !!routeSwagger?.deprecated,
+        operationId: `${ApiClass.name}_${methodLower}`,
+        parameters: params,
+        responses: { 200: { description: 'OK' } },
+      }
+    }
+  }
+  return openapi
+}
+
+function buildOpenApi(swagger, version = null) {
+  const openapi = applySwaggerOpenApi(
+    {
+      openapi: '3.0.3',
+      info: { ...swagger.info },
+      paths: {},
+    },
+    swagger,
+  )
+  const label = normalizeVersionLabel(version)
+  if (label && label !== UNVERSIONED_SWAGGER_NAME) {
+    openapi.info = { ...openapi.info, version: label }
+  }
+  return fillOpenApiPaths(openapi, version)
+}
+
+function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
   const uiOpts = { ...swagger.ui }
   delete uiOpts.presets
   delete uiOpts.plugins
@@ -555,9 +670,12 @@ function swaggerUiHtml(swagger, openapiUrl) {
   if (swagger.navbar?.urls?.length) {
     delete uiOpts.url
     uiOpts.urls = swagger.navbar.urls
+    const name = primaryName || swagger.navbar.urls[0]?.name
+    if (name) uiOpts['urls.primaryName'] = name
   } else {
     uiOpts.url = openapiUrl
     delete uiOpts.urls
+    delete uiOpts['urls.primaryName']
   }
   uiOpts.dom_id = '#swagger-ui'
 
@@ -573,7 +691,7 @@ function swaggerUiHtml(swagger, openapiUrl) {
   const showUrlInput = swagger.navbar?.showUrlInput !== false
   const hideUrlCss =
     navbarEnabled && !showUrlInput
-      ? `<style>.topbar .download-url-wrapper { display: none !important; }</style>`
+      ? `<style>.topbar form { display: none !important; }</style>`
       : ''
   const standaloneScript = navbarEnabled
     ? `<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>`
@@ -657,64 +775,26 @@ class FusionApp {
     const swagger = readSwaggerSettings()
     if (swagger.enabled) {
       const prefix = swagger.path
+      const labels = applyVersionNavbar(swagger)
+      const combined = buildOpenApi(swagger)
 
-      const openapi = applySwaggerOpenApi(
-        {
-          openapi: '3.0.3',
-          info: { ...swagger.info },
-          paths: {},
-        },
-        swagger,
-      )
-
-      const parsePathParams = (pattern) => {
-        return String(pattern)
-          .split('/')
-          .filter((seg) => (seg.startsWith('{') && seg.endsWith('}')) || (seg.startsWith('[') && seg.endsWith(']')))
-          .map((seg) => seg.slice(1, -1))
-      }
-
-      for (const item of registry) {
-        const { path: p, ApiClass, swagger: routeSwagger } = item
-        const pathParams = parsePathParams(p)
-        const resolvedPath = p.startsWith('/') ? p : `/${p}`
-
-        if (!openapi.paths[resolvedPath]) openapi.paths[resolvedPath] = {}
-
-        for (const methodName of HTTP_METHODS) {
-          if (!definesMethod(ApiClass, methodName)) continue
-
-          const methodUpper = String(methodName).toUpperCase()
-          const methodLower = String(methodName).toLowerCase()
-
-          const params = pathParams.map((name) => ({
-            name,
-            in: 'path',
-            required: true,
-            schema: { type: 'string' },
-          }))
-
-          openapi.paths[resolvedPath][methodLower] = {
-            tags: routeSwagger?.tags?.length ? routeSwagger.tags : [],
-            summary: routeSwagger?.title ?? `${ApiClass.name}.${methodUpper}`,
-            description: routeSwagger?.description ?? '',
-            deprecated: !!routeSwagger?.deprecated,
-            operationId: `${ApiClass.name}_${methodLower}`,
-            parameters: params,
-            responses: { '200': { description: 'OK' } },
-          }
-        }
-      }
-
-      const uiEnvelope = () => ({
+      const htmlEnvelope = (primaryName = null) => ({
         status: 200,
-        body: swaggerUiHtml(swagger, `${prefix}/openapi.json`),
+        body: swaggerUiHtml(swagger, `${prefix}/openapi.json`, primaryName),
         headers: { 'content-type': 'text/html' },
       })
-      this.engine.route('GET', `${prefix}/openapi.json`, () => openapi)
-      this.engine.route('GET', prefix, uiEnvelope)
+
+      this.engine.route('GET', `${prefix}/openapi.json`, () => combined)
+      this.engine.route('GET', prefix, () => htmlEnvelope())
       if (prefix !== '/') {
-        this.engine.route('GET', `${prefix}/`, uiEnvelope)
+        this.engine.route('GET', `${prefix}/`, () => htmlEnvelope())
+      }
+
+      for (const label of labels) {
+        const spec = buildOpenApi(swagger, label)
+        this.engine.route('GET', `${prefix}/${label}/openapi.json`, () => spec)
+        this.engine.route('GET', `${prefix}/${label}`, () => htmlEnvelope(label))
+        this.engine.route('GET', `${prefix}/${label}/`, () => htmlEnvelope(label))
       }
     }
 

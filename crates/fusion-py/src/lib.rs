@@ -438,9 +438,23 @@ fn py_register_route(
 }
 
 #[pyfunction(name = "openapi_spec")]
-fn py_openapi_spec(py: Python<'_>) -> PyResult<PyObject> {
-    let spec = api_types::openapi_spec();
+#[pyo3(signature = (version=None))]
+fn py_openapi_spec(py: Python<'_>, version: Option<String>) -> PyResult<PyObject> {
+    let spec = match version.as_deref() {
+        None => api_types::openapi_spec(),
+        Some(v) => api_types::openapi_spec_for(Some(v)),
+    };
     json_to_py(py, &spec)
+}
+
+#[pyfunction(name = "route_versions")]
+fn py_route_versions() -> Vec<String> {
+    api_types::route_versions()
+}
+
+#[pyfunction(name = "has_unversioned_routes")]
+fn py_has_unversioned_routes() -> bool {
+    api_types::has_unversioned_routes()
 }
 
 #[pyfunction]
@@ -478,6 +492,8 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(clear_routes, m)?)?;
     m.add_function(wrap_pyfunction!(http_error_to_response, m)?)?;
     m.add_function(wrap_pyfunction!(py_openapi_spec, m)?)?;
+    m.add_function(wrap_pyfunction!(py_route_versions, m)?)?;
+    m.add_function(wrap_pyfunction!(py_has_unversioned_routes, m)?)?;
     m.add("HTTP_METHODS", HTTP_METHODS)?;
     add_status_module(m)?;
     add_header_module(m)?;

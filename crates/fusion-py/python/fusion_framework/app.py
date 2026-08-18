@@ -3,9 +3,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fusion_framework._fusion import App
+from fusion_framework._fusion import (
+    App,
+    openapi_spec as _openapi_spec,
+    route_versions as _route_versions,
+    has_unversioned_routes as _has_unversioned_routes,
+)
 from fusion_framework.config import get_settings, load_settings_module, settings as settings_store
-from fusion_framework._fusion import openapi_spec as _openapi_spec
 from fusion_framework.middleware import framework_headers, set_active_global
 
 
@@ -65,9 +69,11 @@ def _swagger_settings(settings) -> dict[str, Any]:
 
     navbar = _as_dict(settings.get("swagger.navbar", default={}))
     navbar_enabled = _truthy_enabled(navbar.get("enabled", True), default=True)
+    show_url_input_set = "showUrlInput" in navbar
     show_url_input = _truthy_enabled(navbar.get("showUrlInput", True), default=True)
     navbar_urls = navbar.get("urls")
-    if not isinstance(navbar_urls, list):
+    urls_set = isinstance(navbar_urls, list)
+    if not urls_set:
         navbar_urls = None
 
     ui = {
@@ -111,19 +117,60 @@ def _swagger_settings(settings) -> dict[str, Any]:
         "navbar": {
             "enabled": navbar_enabled,
             "showUrlInput": show_url_input,
+            "showUrlInputSet": show_url_input_set,
             "urls": navbar_urls,
+            "urlsSet": urls_set,
         },
         "ui": ui,
     }
 
 
-def _build_openapi(swagger: dict[str, Any]) -> dict:
-    openapi = _openapi_spec()
+UNVERSIONED_SWAGGER_NAME = "default"
+
+
+def _normalize_version_label(value: Any) -> str:
+    return str(value or "").strip().strip("/")
+
+
+def _swagger_version_urls(prefix: str) -> list[dict[str, str]]:
+    urls: list[dict[str, str]] = []
+    for version in _route_versions():
+        label = _normalize_version_label(version)
+        if not label:
+            continue
+        urls.append({"url": f"{prefix}/{label}/openapi.json", "name": label})
+    if _has_unversioned_routes() and urls:
+        urls.append(
+            {
+                "url": f"{prefix}/{UNVERSIONED_SWAGGER_NAME}/openapi.json",
+                "name": UNVERSIONED_SWAGGER_NAME,
+            }
+        )
+    return urls
+
+
+def _apply_version_navbar(swagger: dict[str, Any]) -> list[str]:
+    """Fill navbar spec URLs from `@route(version=...)` when the user did not set them."""
+    navbar = swagger.setdefault("navbar", {})
+    auto_urls = _swagger_version_urls(swagger["path"])
+    labels = [item["name"] for item in auto_urls]
+    if not navbar.get("urlsSet") and auto_urls:
+        navbar["urls"] = auto_urls
+        if not navbar.get("showUrlInputSet"):
+            navbar["showUrlInput"] = False
+    return labels
+
+
+def _build_openapi(swagger: dict[str, Any], version: str | None = None) -> dict:
+    openapi = _openapi_spec() if version is None else _openapi_spec(version)
     if not isinstance(openapi, dict):
         return openapi
 
     current = _as_dict(openapi.get("info"))
     current.update(swagger["info"])
+    label = _normalize_version_label(version or "")
+    if label and label != UNVERSIONED_SWAGGER_NAME:
+        current["version"] = label
     openapi["info"] = current
 
     if swagger.get("servers"):
@@ -144,7 +191,7 @@ def _build_openapi(swagger: dict[str, Any]) -> dict:
     return openapi
 
 
-def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str) -> str:
+def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str, primary_name: str | None = None) -> str:
     ui_opts = dict(swagger["ui"])
     navbar = swagger["navbar"]
     auth = swagger["auth"]
@@ -157,9 +204,13 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str) -> str:
     if navbar.get("urls"):
         ui_opts.pop("url", None)
         ui_opts["urls"] = navbar["urls"]
+        name = primary_name or (navbar["urls"][0].get("name") if navbar["urls"] else None)
+        if name:
+            ui_opts["urls.primaryName"] = name
     else:
         ui_opts["url"] = openapi_url
         ui_opts.pop("urls", None)
+        ui_opts.pop("urls.primaryName", None)
 
     ui_opts["dom_id"] = "#swagger-ui"
 
@@ -172,9 +223,10 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str) -> str:
     show_url_input = bool(navbar.get("showUrlInput", True))
     hide_url_css = ""
     if navbar_enabled and not show_url_input:
+        # Keep the version <select>; hide only the free-text Explore box.
         hide_url_css = """
     <style>
-      .topbar .download-url-wrapper { display: none !important; }
+      .topbar form { display: none !important; }
     </style>"""
 
     standalone_script = ""
@@ -223,6 +275,47 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str) -> str:
 </html>"""
 
 
+def _html_response(html: str) -> dict:
+    return {"status": 200, "body": html, "headers": {"content-type": "text/html"}}
+
+
+def _mount_swagger(engine, swagger: dict[str, Any]) -> None:
+    prefix = swagger["path"]
+    labels = _apply_version_navbar(swagger)
+
+    combined = _build_openapi(swagger)
+    engine.route("GET", f"{prefix}/openapi.json", lambda _req, spec=combined: spec)
+
+    for label in labels:
+        spec = _build_openapi(swagger, version=label)
+        engine.route(
+            "GET",
+            f"{prefix}/{label}/openapi.json",
+            lambda _req, spec=spec: spec,
+        )
+        engine.route(
+            "GET",
+            f"{prefix}/{label}",
+            lambda _req, name=label: _html_response(
+                _swagger_ui_html(swagger, f"{prefix}/{name}/openapi.json", primary_name=name)
+            ),
+        )
+        engine.route(
+            "GET",
+            f"{prefix}/{label}/",
+            lambda _req, name=label: _html_response(
+                _swagger_ui_html(swagger, f"{prefix}/{name}/openapi.json", primary_name=name)
+            ),
+        )
+
+    def ui_root(_req: dict):
+        return _html_response(_swagger_ui_html(swagger, f"{prefix}/openapi.json"))
+
+    engine.route("GET", prefix, ui_root)
+    if prefix != "/":
+        engine.route("GET", f"{prefix}/", ui_root)
+
+
 class FusionApp:
     """Thin façade over the Rust ``App`` engine."""
 
@@ -243,18 +336,7 @@ class FusionApp:
             self._engine.mount_routes()
             swagger = _swagger_settings(self.settings)
             if swagger.get("enabled"):
-                prefix = swagger["path"]
-                openapi = _build_openapi(swagger)
-
-                def openapi_handler(_req: dict):
-                    return openapi
-
-                def ui_handler(_req: dict):
-                    html = _swagger_ui_html(swagger, f"{prefix}/openapi.json")
-                    return {"status": 200, "body": html, "headers": {"content-type": "text/html"}}
-
-                self._engine.route("GET", f"{prefix}/openapi.json", openapi_handler)
-                self._engine.route("GET", prefix, ui_handler)
+                _mount_swagger(self._engine, swagger)
             self._mounted = True
         host = host if host is not None else self.settings.host
         port = port if port is not None else self.settings.port
