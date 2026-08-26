@@ -52,7 +52,22 @@ foreach (var mw in MIDDLEWARE) app.Use(mw);
 app.Listen();
 ```
 
-## Middleware
+## Custom HTTP routes
+
+Use method-level attributes alongside convention `get`/`post`/… handlers:
+
+```csharp
+[Route("/api/[module]")]
+public class UserModule : FusionBaseApi
+{
+    public object Get() => Response(new { mode = "convention" });
+
+    [HttpGet("test/[action]")]
+    public object UserAction() => Response(new { mode = "custom" });
+}
+```
+
+`[action]` becomes the handler name without an `Action` suffix, lowercased (`UserAction` → `user`).
 
 ```csharp
 MIDDLEWARE.Add(Middleware.BearerJwt());

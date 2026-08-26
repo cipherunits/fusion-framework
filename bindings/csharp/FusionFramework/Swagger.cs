@@ -223,23 +223,18 @@ internal static class SwaggerDocs
         foreach (var entry in Route.Snapshot())
         {
             if (!MatchesVersion(entry.Version, versionFilter)) continue;
-            var path = entry.Path.StartsWith('/') ? entry.Path : "/" + entry.Path;
-            if (paths[path] is not JsonObject methods)
-            {
-                methods = new JsonObject();
-                paths[path] = methods;
-            }
 
-            var pathParams = PathParams(path);
-            foreach (var methodName in HttpMethods)
+            foreach (var slot in entry.Slots)
             {
-                var mi = entry.ApiClass.GetMethod(
-                    methodName,
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
-                if (mi is null) continue;
+                var path = slot.Path.StartsWith('/') ? slot.Path : "/" + slot.Path;
+                if (paths[path] is not JsonObject methods)
+                {
+                    methods = new JsonObject();
+                    paths[path] = methods;
+                }
 
-                var methodLower = methodName.ToLowerInvariant();
-                var methodUpper = methodName.ToUpperInvariant();
+                var pathParams = PathParams(path);
+                var methodLower = slot.HttpMethod.ToLowerInvariant();
                 var parameters = new JsonArray();
                 foreach (var name in pathParams)
                 {
@@ -253,16 +248,16 @@ internal static class SwaggerDocs
                 }
 
                 var tags = new JsonArray();
-                foreach (var tag in entry.Tags)
+                foreach (var tag in slot.Tags)
                     tags.Add(tag);
 
                 methods[methodLower] = new JsonObject
                 {
                     ["tags"] = tags,
-                    ["summary"] = entry.Title ?? $"{entry.ApiClass.Name}.{methodUpper}",
-                    ["description"] = entry.Desc ?? "",
-                    ["deprecated"] = entry.Deprecated,
-                    ["operationId"] = $"{entry.ApiClass.Name}_{methodLower}",
+                    ["summary"] = slot.Title ?? $"{entry.ApiClass.Name}.{slot.Handler.Name}",
+                    ["description"] = slot.Desc ?? "",
+                    ["deprecated"] = slot.Deprecated,
+                    ["operationId"] = $"{entry.ApiClass.Name}_{slot.Handler.Name}",
                     ["parameters"] = parameters,
                     ["responses"] = new JsonObject
                     {

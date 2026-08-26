@@ -219,6 +219,121 @@ function resolveRoutePath(routePath, ApiClass) {
   return native.resolveRoutePathJs(routePath, ApiClass.name)
 }
 
+function apiActionName(methodName) {
+  if (typeof native.apiActionNameJs === 'function') {
+    return native.apiActionNameJs(methodName)
+  }
+  let stem = methodName
+  if (methodName.endsWith('Action') && methodName.length > 6) stem = methodName.slice(0, -6)
+  else if (methodName.endsWith('ACTION') && methodName.length > 6) stem = methodName.slice(0, -6)
+  return stem.toLowerCase()
+}
+
+function resolveMethodRoutePath(template, className, methodName) {
+  if (typeof native.resolveMethodRoutePathJs === 'function') {
+    return native.resolveMethodRoutePathJs(template, className, methodName)
+  }
+  return resolveRoutePath(template, { name: className }).replace(
+    /\[action\]/g,
+    apiActionName(methodName),
+  )
+}
+
+function joinRoutePaths(base, segment) {
+  const left = String(base || '').replace(/\/+$/, '')
+  const right = String(segment || '').replace(/^\/+|\/+$/g, '')
+  if (!right) return left || '/'
+  if (!left) return `/${right}`
+  return `${left}/${right}`
+}
+
+function resolveHandlerRoute(classBasePath, template, className, methodName) {
+  if (typeof native.resolveHandlerRouteJs === 'function') {
+    return native.resolveHandlerRouteJs(classBasePath, template, className, methodName)
+  }
+  const resolved = resolveMethodRoutePath(template, className, methodName)
+  if (String(template).startsWith('/')) {
+    return joinRoutePaths('', resolved.replace(/^\/+/, ''))
+  }
+  return joinRoutePaths(classBasePath, resolved)
+}
+
+function httpRoute(method, route, options = {}) {
+  const meta = {
+    method: String(method).toLowerCase(),
+    template: route,
+    tags: Array.isArray(options.tags) ? options.tags : [],
+    desc: options.desc ?? null,
+    title: options.title ?? null,
+    deprecated: !!options.deprecated,
+  }
+  function wrap(fn) {
+    fn.__fusionHttpRoute = meta
+    return fn
+  }
+  return wrap
+}
+
+function httpGet(route, options = {}) {
+  return httpRoute('get', route, options)
+}
+function httpPost(route, options = {}) {
+  return httpRoute('post', route, options)
+}
+function httpPut(route, options = {}) {
+  return httpRoute('put', route, options)
+}
+function httpPatch(route, options = {}) {
+  return httpRoute('patch', route, options)
+}
+function httpDelete(route, options = {}) {
+  return httpRoute('delete', route, options)
+}
+function httpHead(route, options = {}) {
+  return httpRoute('head', route, options)
+}
+function httpOptions(route, options = {}) {
+  return httpRoute('options', route, options)
+}
+
+function collectRouteSlots(ApiClass, classBasePath, classSwagger) {
+  const slots = []
+  const custom = new Set()
+  const className = ApiClass.name
+
+  for (const key of Object.getOwnPropertyNames(ApiClass.prototype)) {
+    if (key === 'constructor' || key.startsWith('_')) continue
+    const fn = ApiClass.prototype[key]
+    if (typeof fn !== 'function' || !fn.__fusionHttpRoute) continue
+    custom.add(key)
+    const meta = fn.__fusionHttpRoute
+    slots.push({
+      path: resolveHandlerRoute(classBasePath, meta.template, className, key),
+      httpMethod: meta.method,
+      handlerMethod: key,
+      swagger: {
+        tags: meta.tags,
+        description: meta.desc,
+        title: meta.title,
+        deprecated: meta.deprecated,
+      },
+    })
+  }
+
+  for (const methodName of HTTP_METHODS) {
+    if (custom.has(methodName)) continue
+    if (!definesMethod(ApiClass, methodName)) continue
+    slots.push({
+      path: classBasePath,
+      httpMethod: methodName,
+      handlerMethod: methodName,
+      swagger: classSwagger,
+    })
+  }
+
+  return slots
+}
+
 function emptyRequest() {
   return {
     method: '',
@@ -372,17 +487,21 @@ function router(routePath, options = {}) {
       )
     }
 
+    const classSwagger = {
+      tags: Array.isArray(options.tags) ? options.tags : [],
+      description: options.desc ?? null,
+      title: options.title ?? null,
+      deprecated: !!options.deprecated,
+    }
+
     registry.push({
       path: resolved,
+      classBasePath: resolved,
       ApiClass,
       middleware: routeMiddleware,
-      swagger: {
-        tags: Array.isArray(options.tags) ? options.tags : [],
-        description: options.desc ?? null,
-        title: options.title ?? null,
-        deprecated: !!options.deprecated,
-      },
+      swagger: classSwagger,
       version_prefix: v,
+      slots: collectRouteSlots(ApiClass, resolved, classSwagger),
     })
     return ApiClass
   }
@@ -612,18 +731,18 @@ function fillOpenApiPaths(openapi, versionFilter = null) {
 
   for (const item of registry) {
     if (!routeMatchesVersion(item, versionFilter)) continue
-    const { path: p, ApiClass, swagger: routeSwagger } = item
-    const pathParams = parsePathParams(p)
-    const resolvedPath = p.startsWith('/') ? p : `/${p}`
+    const { ApiClass, swagger: routeSwagger } = item
+    const slots = item.slots || []
 
-    if (!openapi.paths[resolvedPath]) openapi.paths[resolvedPath] = {}
+    for (const slot of slots) {
+      const pathParams = parsePathParams(slot.path)
+      const resolvedPath = slot.path.startsWith('/') ? slot.path : `/${slot.path}`
+      const routeSwaggerEntry = slot.swagger || routeSwagger
 
-    for (const methodName of HTTP_METHODS) {
-      if (!definesMethod(ApiClass, methodName)) continue
+      if (!openapi.paths[resolvedPath]) openapi.paths[resolvedPath] = {}
 
-      const methodUpper = String(methodName).toUpperCase()
-      const methodLower = String(methodName).toLowerCase()
-
+      const methodLower = String(slot.httpMethod).toLowerCase()
+      const methodUpper = methodLower.toUpperCase()
       const params = pathParams.map((name) => ({
         name,
         in: 'path',
@@ -632,11 +751,11 @@ function fillOpenApiPaths(openapi, versionFilter = null) {
       }))
 
       openapi.paths[resolvedPath][methodLower] = {
-        tags: routeSwagger?.tags?.length ? routeSwagger.tags : [],
-        summary: routeSwagger?.title ?? `${ApiClass.name}.${methodUpper}`,
-        description: routeSwagger?.description ?? '',
-        deprecated: !!routeSwagger?.deprecated,
-        operationId: `${ApiClass.name}_${methodLower}`,
+        tags: routeSwaggerEntry?.tags?.length ? routeSwaggerEntry.tags : [],
+        summary: routeSwaggerEntry?.title ?? `${ApiClass.name}.${slot.handlerMethod}`,
+        description: routeSwaggerEntry?.description ?? '',
+        deprecated: !!routeSwaggerEntry?.deprecated,
+        operationId: `${ApiClass.name}_${slot.handlerMethod}`,
         parameters: params,
         responses: { 200: { description: 'OK' } },
       }
@@ -751,16 +870,16 @@ class FusionApp {
     if (this.mounted) return
     activeGlobalMiddleware = [...this._middleware]
 
-    for (const { path: routePath, ApiClass, middleware: routeMiddleware = [] } of registry) {
-      for (const methodName of HTTP_METHODS) {
-        if (!definesMethod(ApiClass, methodName)) continue
-        this.engine.route(methodName.toUpperCase(), routePath, (errOrRequest, maybeRequest) => {
+    for (const { ApiClass, middleware: routeMiddleware = [], slots = [] } of registry) {
+      for (const slot of slots) {
+        const handlerMethod = slot.handlerMethod
+        this.engine.route(String(slot.httpMethod).toUpperCase(), slot.path, (errOrRequest, maybeRequest) => {
           const request = nativeRequestArg(errOrRequest, maybeRequest)
           const chain = [...activeGlobalMiddleware, ...routeMiddleware]
           const handler = async (req) => {
             try {
               const instance = new ApiClass(req || emptyRequest())
-              const fn = instance[methodName]
+              const fn = instance[handlerMethod]
               return await Promise.resolve(fn.call(instance))
             } catch (err) {
               if (err instanceof HTTPException) return err.toResponse()
@@ -852,8 +971,17 @@ module.exports = {
   HTTPException,
   router,
   route,
+  httpGet,
+  httpPost,
+  httpPut,
+  httpPatch,
+  httpDelete,
+  httpHead,
+  httpOptions,
   apiResourceName,
   resolveRoutePath,
+  resolveHandlerRoute,
+  apiActionName,
   configure,
   getSettings,
   settings,

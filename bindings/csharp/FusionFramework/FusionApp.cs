@@ -34,22 +34,17 @@ public sealed class FusionApp : IDisposable
     public void Mount()
     {
         Middleware.SetActiveGlobal(_middleware);
-        var httpMethods = new[] { "get", "post", "put", "patch", "delete", "head", "options" };
 
         foreach (var entry in Route.Snapshot())
         {
-            foreach (var methodName in httpMethods)
+            foreach (var mountSlot in entry.Slots)
             {
-                var mi = entry.ApiClass.GetMethod(
-                    methodName,
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.IgnoreCase);
-                if (mi is null) continue;
-
                 var slot = new RouteSlot
                 {
                     Entry = entry,
-                    Method = methodName.ToUpperInvariant(),
-                    Handler = mi,
+                    Path = mountSlot.Path,
+                    Method = mountSlot.HttpMethod.ToUpperInvariant(),
+                    Handler = mountSlot.Handler,
                     Global = _middleware.ToList(),
                 };
 
@@ -113,8 +108,8 @@ public sealed class FusionApp : IDisposable
                 _pins.Add(gch);
                 _pins.Add(GCHandle.Alloc(cb));
 
-                if (Native.fusion_app_route(_app, slot.Method, entry.Path, cb, GCHandle.ToIntPtr(gch)) != 0)
-                    throw new InvalidOperationException($"Failed to register {slot.Method} {entry.Path}");
+                if (Native.fusion_app_route(_app, slot.Method, slot.Path, cb, GCHandle.ToIntPtr(gch)) != 0)
+                    throw new InvalidOperationException($"Failed to register {slot.Method} {slot.Path}");
             }
         }
 

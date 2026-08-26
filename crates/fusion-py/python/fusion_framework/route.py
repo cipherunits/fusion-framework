@@ -12,15 +12,45 @@ from fusion_framework._fusion import (
     resolve_route_path,
 )
 from fusion_framework.api import FusionBaseApi
+from fusion_framework.http_route import (
+    HttpDelete,
+    HttpGet,
+    HttpHead,
+    HttpOptions,
+    HttpPatch,
+    HttpPost,
+    HttpPut,
+    http_delete,
+    http_get,
+    http_head,
+    http_options,
+    http_patch,
+    http_post,
+    http_put,
+)
 from fusion_framework.middleware import require_roles
 
 __all__ = [
     "HTTP_METHODS",
+    "HttpDelete",
+    "HttpGet",
+    "HttpHead",
+    "HttpOptions",
+    "HttpPatch",
+    "HttpPost",
+    "HttpPut",
     "api_resource_name",
+    "clear_registry",
+    "http_delete",
+    "http_get",
+    "http_head",
+    "http_options",
+    "http_patch",
+    "http_post",
+    "http_put",
     "resolve_route_path",
     "route",
     "router",
-    "clear_registry",
 ]
 
 

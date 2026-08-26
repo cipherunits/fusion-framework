@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use fusion_core::{
-    HttpError, ParamKind, ParamSpec, Request, bind_args, build_response, resolve_route_path,
+    HttpError, ParamKind, ParamSpec, Request, bind_args, build_response, resolve_handler_route,
     HTTP_METHODS,
 };
 use pyo3::exceptions::PyRuntimeError;
@@ -232,15 +232,33 @@ pub fn is_http_exception(py: Python<'_>, err: &Bound<'_, PyAny>) -> Option<Py<Py
 
 // ─── Route registry ──────────────────────────────────────────────────────────
 
-struct RegisteredRoute {
+struct RouteMountSlot {
     path: String,
+    http_method: String,
+    handler_method: String,
+    specs: Vec<ParamSpec>,
+    swagger: SwaggerMeta,
+}
+
+impl Clone for RouteMountSlot {
+    fn clone(&self) -> Self {
+        Self {
+            path: self.path.clone(),
+            http_method: self.http_method.clone(),
+            handler_method: self.handler_method.clone(),
+            specs: self.specs.clone(),
+            swagger: self.swagger.clone(),
+        }
+    }
+}
+
+struct RegisteredRoute {
     api_name: String,
     api_cls: Py<PyType>,
-    method_specs: HashMap<String, Vec<ParamSpec>>,
-    swagger: SwaggerMeta,
     middleware: Vec<Py<PyAny>>,
     /// Normalized route version (`v1`), if the `@route(..., version=)` was set.
     version: Option<String>,
+    slots: Vec<RouteMountSlot>,
 }
 
 fn normalize_api_version(version: Option<String>) -> Option<String> {
@@ -311,84 +329,190 @@ pub fn register_route(
 
     let class_name: String = api_cls.name()?.extract()?;
     let version = normalize_api_version(version);
-    let mut resolved = resolve_route_path(template, &class_name);
+    let mut class_base_path = fusion_core::resolve_route_path(template, &class_name);
+    if !class_base_path.starts_with('/') {
+        class_base_path = format!("/{class_base_path}");
+    }
     if let Some(v) = version.as_deref() {
-        // Prefix the resolved api path with version: `v1/api/` style.
-        let trimmed = resolved.trim_start_matches('/');
-        resolved = format!("{}/{}", v, trimmed);
+        let trimmed = class_base_path.trim_start_matches('/');
+        class_base_path = format!("/{v}/{}", trimmed.trim_start_matches('/'));
     }
 
-    let mut method_specs = HashMap::new();
+    let class_swagger = SwaggerMeta {
+        tags,
+        description,
+        title,
+        deprecated,
+    };
+
+    let mut slots = Vec::new();
+    let mut custom_handlers = std::collections::HashSet::new();
+
+    for (method_name, method) in iter_class_callables(py, &api_cls)? {
+        let method = method.bind(py);
+        let Some(meta) = read_http_route_meta(&method)? else {
+            continue;
+        };
+        custom_handlers.insert(method_name.clone());
+        let path = resolve_handler_route(
+            &class_base_path,
+            &meta.template,
+            &class_name,
+            &method_name,
+        );
+        let specs = extract_param_specs(py, &method)?;
+        slots.push(RouteMountSlot {
+            path,
+            http_method: meta.http_method,
+            handler_method: method_name,
+            specs,
+            swagger: meta.swagger,
+        });
+    }
+
     for method_name in HTTP_METHODS {
+        if custom_handlers.contains(*method_name) {
+            continue;
+        }
         if !defines_method(&api_cls, method_name)? {
             continue;
         }
         let method = api_cls.getattr(method_name)?;
-        method_specs.insert(
-            method_name.to_string(),
-            extract_param_specs(py, &method)?,
-        );
+        slots.push(RouteMountSlot {
+            path: class_base_path.clone(),
+            http_method: (*method_name).to_string(),
+            handler_method: (*method_name).to_string(),
+            specs: extract_param_specs(py, &method)?,
+            swagger: class_swagger.clone(),
+        });
     }
 
-    api_cls.setattr("__fusion_path__", &resolved)?;
+    let primary_path = slots
+        .first()
+        .map(|s| s.path.clone())
+        .unwrap_or_else(|| class_base_path.clone());
+
+    api_cls.setattr("__fusion_path__", &primary_path)?;
     api_cls.setattr("__fusion_path_template__", template)?;
 
     REGISTRY
         .lock()
         .map_err(|_| PyRuntimeError::new_err("registry lock poisoned"))?
         .push(RegisteredRoute {
-            path: resolved.clone(),
-            api_name: class_name.clone(),
+            api_name: class_name,
             api_cls: api_cls.unbind(),
-            method_specs,
-            swagger: SwaggerMeta {
-                tags,
-                description,
-                title,
-                deprecated,
-            },
             middleware,
             version,
+            slots,
         });
 
-    Ok(resolved)
+    Ok(primary_path)
+}
+
+struct HttpRouteMeta {
+    http_method: String,
+    template: String,
+    swagger: SwaggerMeta,
+}
+
+fn read_http_route_meta(method: &Bound<'_, PyAny>) -> PyResult<Option<HttpRouteMeta>> {
+    if !method.hasattr("__fusion_http_route__")? {
+        return Ok(None);
+    }
+    let meta = method.getattr("__fusion_http_route__")?;
+    let dict = meta.downcast::<PyDict>()?;
+    let http_method: String = dict
+        .get_item("method")?
+        .and_then(|v| v.extract().ok())
+        .unwrap_or_else(|| "get".to_string());
+    let template: String = dict
+        .get_item("template")?
+        .and_then(|v| v.extract().ok())
+        .ok_or_else(|| PyRuntimeError::new_err("http route template required"))?;
+    let tags: Vec<String> = dict
+        .get_item("tags")?
+        .and_then(|v| v.extract().ok())
+        .unwrap_or_default();
+    let description = dict
+        .get_item("desc")?
+        .and_then(|v| v.extract().ok());
+    let title = dict
+        .get_item("title")?
+        .and_then(|v| v.extract().ok());
+    let deprecated = dict
+        .get_item("deprecated")?
+        .and_then(|v| v.extract().ok())
+        .unwrap_or(false);
+    Ok(Some(HttpRouteMeta {
+        http_method: http_method.to_ascii_lowercase(),
+        template,
+        swagger: SwaggerMeta {
+            tags,
+            description,
+            title,
+            deprecated,
+        },
+    }))
+}
+
+fn iter_class_callables(
+    py: Python<'_>,
+    api_cls: &Bound<'_, PyType>,
+) -> PyResult<Vec<(String, Py<PyAny>)>> {
+    let inspect = py.import("inspect")?;
+    let members = inspect.call_method1("getmembers", (api_cls,))?;
+    let mut out = Vec::new();
+    for item in members.try_iter()? {
+        let item = item?;
+        let (name, value): (String, Bound<'_, PyAny>) = item.extract()?;
+        if name.starts_with('_') {
+            continue;
+        }
+        if value.hasattr("__func__")? || inspect.call_method1("isfunction", (value.clone(),))?.is_truthy()? {
+            out.push((name, value.unbind()));
+        } else if inspect.call_method1("ismethod", (value.clone(),))?.is_truthy()? {
+            out.push((name, value.unbind()));
+        }
+    }
+    Ok(out)
 }
 
 pub fn mount_routes(app: &super::PyApp) -> PyResult<()> {
-    let routes: Vec<(String, Py<PyType>, HashMap<String, Vec<ParamSpec>>, Vec<Py<PyAny>>)> =
-        Python::with_gil(|py| {
-            let guard = REGISTRY
-                .lock()
-                .map_err(|_| PyRuntimeError::new_err("registry lock poisoned"))?;
-            Ok::<_, PyErr>(guard
+    let routes: Vec<(Vec<RouteMountSlot>, Py<PyType>, Vec<Py<PyAny>>)> = Python::with_gil(|py| {
+        let guard = REGISTRY
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("registry lock poisoned"))?;
+        Ok::<_, PyErr>(
+            guard
                 .iter()
                 .map(|r| {
                     (
-                        r.path.clone(),
+                        r.slots.clone(),
                         r.api_cls.clone_ref(py),
-                        r.method_specs.clone(),
                         r.middleware.iter().map(|m| m.clone_ref(py)).collect(),
                     )
                 })
-                .collect())
-        })?;
+                .collect(),
+        )
+    })?;
 
-    for (path, api_cls, method_specs, middleware) in routes {
-        for method_name in HTTP_METHODS {
-            let Some(specs) = method_specs.get(*method_name) else {
-                continue;
-            };
+    for (slots, api_cls, middleware) in routes {
+        for slot in slots {
             let handler = Python::with_gil(|py| -> PyResult<PyObject> {
                 let route_handler = RouteHandler {
                     api_cls: api_cls.clone_ref(py),
-                    method_name: (*method_name).to_string(),
-                    specs: specs.clone(),
+                    method_name: slot.handler_method.clone(),
+                    specs: slot.specs.clone(),
                     middleware: middleware.iter().map(|m| m.clone_ref(py)).collect(),
                 };
                 Ok(Py::new(py, route_handler)?.into_any().into())
             })?;
 
-            app.route((*method_name).to_uppercase(), path.clone(), handler)?;
+            app.route(
+                slot.http_method.to_ascii_uppercase(),
+                slot.path.clone(),
+                handler,
+            )?;
         }
     }
     Ok(())
@@ -739,30 +863,26 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
         if !route_matches_version_filter(r.version.as_deref(), version) {
             continue;
         }
-        let resolved_path = if r.path.starts_with('/') {
-            r.path.clone()
-        } else {
-            format!("/{}", r.path)
-        };
 
-        let path_params = extract_path_params_from_pattern(&resolved_path);
+        for slot in &r.slots {
+            let resolved_path = if slot.path.starts_with('/') {
+                slot.path.clone()
+            } else {
+                format!("/{}", slot.path)
+            };
 
-        let mut methods_obj: Map<String, Value> = Map::new();
-
-        for (method, specs) in &r.method_specs {
-            let method_upper = method.to_ascii_uppercase();
-            let method_lower = method.to_string();
+            let path_params = extract_path_params_from_pattern(&resolved_path);
+            let method_upper = slot.http_method.to_ascii_uppercase();
+            let method_lower = slot.http_method.to_ascii_lowercase();
 
             let mut operation_params: Vec<Value> = Vec::new();
             let mut body_properties: Map<String, Value> = Map::new();
             let mut body_required: Vec<String> = Vec::new();
 
-            for spec in specs {
+            for spec in &slot.specs {
                 let nullable = spec.optional || spec.has_default;
                 let required = !nullable;
                 if path_params.iter().any(|p| p == &spec.name) {
-                    // OpenAPI normally requires path params, but if the Python
-                    // signature marks them Optional / defaulted, expose that in Swagger.
                     operation_params.push(json!({
                         "name": spec.name,
                         "in": "path",
@@ -784,20 +904,20 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                 }
             }
 
-            let title = r
+            let title = slot
                 .swagger
                 .title
                 .clone()
-                .unwrap_or_else(|| format!("{} {}", r.api_name, method_upper));
+                .unwrap_or_else(|| format!("{} {}", r.api_name, slot.handler_method));
 
-            let description = r.swagger.description.clone().unwrap_or_default();
-            let deprecated = r.swagger.deprecated;
+            let description = slot.swagger.description.clone().unwrap_or_default();
+            let deprecated = slot.swagger.deprecated;
 
             let mut op = json!({
-                "tags": r.swagger.tags.clone(),
+                "tags": slot.swagger.tags.clone(),
                 "summary": title,
                 "description": description,
-                "operationId": format!("{}_{}", r.api_name, method_lower),
+                "operationId": format!("{}_{}", r.api_name, slot.handler_method),
                 "deprecated": deprecated,
                 "responses": {
                     "200": { "description": "OK" }
@@ -834,7 +954,6 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                     obj.insert("requestBody".to_string(), request_body);
                 }
 
-                // Make a best-effort response schema.
                 if let Some(obj) = op.as_object_mut() {
                     if let Some(resp) = obj.get_mut("responses").and_then(|v| v.as_object_mut()) {
                         resp.insert("200".to_string(), json!({
@@ -843,25 +962,23 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                         }));
                     }
                 }
-            } else {
-                // If we only have query/path parameters, default to JSON response.
-                if let Some(obj) = op.as_object_mut() {
-                    if let Some(resp) = obj.get_mut("responses").and_then(|v| v.as_object_mut()) {
-                        resp.insert("200".to_string(), json!({
-                            "description": "OK",
-                            "content": { "application/json": { "schema": { "type": "object" } } }
-                        }));
-                    }
+            } else if let Some(obj) = op.as_object_mut() {
+                if let Some(resp) = obj.get_mut("responses").and_then(|v| v.as_object_mut()) {
+                    resp.insert("200".to_string(), json!({
+                        "description": "OK",
+                        "content": { "application/json": { "schema": { "type": "object" } } }
+                    }));
                 }
             }
 
-            methods_obj.insert(method_lower, op);
-        }
+            let methods_obj = paths.entry(resolved_path).or_insert_with(|| Value::Object(Map::new()));
+            if let Some(obj) = methods_obj.as_object_mut() {
+                obj.insert(method_lower, op);
+            }
 
-        paths.insert(resolved_path, Value::Object(methods_obj));
-        // Collect tag names.
-        for t in &r.swagger.tags {
-            tags_set.insert(t.clone());
+            for t in &slot.swagger.tags {
+                tags_set.insert(t.clone());
+            }
         }
     }
 

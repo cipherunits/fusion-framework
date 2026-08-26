@@ -26,7 +26,10 @@ pub use headers::{
     X_FRAMEWORK, X_FUSION_VERSION, X_POWERED_BY,
 };
 pub use http_error::HttpError;
-pub use naming::{HTTP_METHODS, api_resource_name, resolve_route_path};
+pub use naming::{
+    HTTP_METHODS, api_action_name, api_resource_name, join_route_paths, resolve_handler_route,
+    resolve_method_route_path, resolve_route_path,
+};
 pub use request::{parse_query, Request};
 pub use response::Response;
 pub use router::Router;
