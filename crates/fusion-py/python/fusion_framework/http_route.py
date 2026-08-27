@@ -17,10 +17,11 @@ def _http_route(
     deprecated: bool = False,
 ) -> Callable[[F], F]:
     def decorator(fn: F) -> F:
+        # tags=None means inherit from @route(...); tags=[] clears; tags=[...] overrides.
         fn.__fusion_http_route__ = {
             "method": http_method.lower(),
             "template": route,
-            "tags": list(tags or []),
+            "tags": list(tags) if tags is not None else None,
             "desc": desc,
             "title": title,
             "deprecated": deprecated,

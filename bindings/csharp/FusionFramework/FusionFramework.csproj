@@ -6,8 +6,8 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>FusionFramework</RootNamespace>
     <AssemblyName>FusionFramework</AssemblyName>
-    <PackageId>FusionFramework</PackageId>
-    <Version>1.2.4</Version>
+    <PackageId>Fusion-Framework</PackageId>
+    <Version>1.2.5</Version>
     <Authors>CipherUnits</Authors>
     <Company>CipherUnits</Company>
     <Description>Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core</Description>

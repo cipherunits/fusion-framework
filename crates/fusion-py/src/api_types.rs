@@ -21,6 +21,21 @@ struct SwaggerMeta {
     deprecated: bool,
 }
 
+/// Merge method-level OpenAPI meta onto class `@route` meta (C# / Node parity).
+/// When `tags_set` is false, inherit class tags; when true, keep method tags (even if empty).
+fn merge_swagger(method: SwaggerMeta, class: &SwaggerMeta, tags_set: bool) -> SwaggerMeta {
+    SwaggerMeta {
+        tags: if tags_set {
+            method.tags
+        } else {
+            class.tags.clone()
+        },
+        description: method.description.or_else(|| class.description.clone()),
+        title: method.title.or_else(|| class.title.clone()),
+        deprecated: method.deprecated || class.deprecated,
+    }
+}
+
 fn extract_path_params_from_pattern(path: &str) -> Vec<String> {
     // Match fusion-core router pattern tokens: `{id}` or `[module]` style.
     // Note: `[module]` should already be resolved to a static segment by resolve_route_path.
@@ -366,7 +381,7 @@ pub fn register_route(
             http_method: meta.http_method,
             handler_method: method_name,
             specs,
-            swagger: meta.swagger,
+            swagger: merge_swagger(meta.swagger, &class_swagger, meta.tags_set),
         });
     }
 
@@ -412,6 +427,8 @@ pub fn register_route(
 struct HttpRouteMeta {
     http_method: String,
     template: String,
+    /// True when the decorator passed `tags=` (including an empty list).
+    tags_set: bool,
     swagger: SwaggerMeta,
 }
 
@@ -429,10 +446,18 @@ fn read_http_route_meta(method: &Bound<'_, PyAny>) -> PyResult<Option<HttpRouteM
         .get_item("template")?
         .and_then(|v| v.extract().ok())
         .ok_or_else(|| PyRuntimeError::new_err("http route template required"))?;
-    let tags: Vec<String> = dict
-        .get_item("tags")?
-        .and_then(|v| v.extract().ok())
-        .unwrap_or_default();
+    let tags_item = dict.get_item("tags")?;
+    let tags_set = match &tags_item {
+        Some(v) => !v.is_none(),
+        None => false,
+    };
+    let tags: Vec<String> = if tags_set {
+        tags_item
+            .and_then(|v| v.extract().ok())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let description = dict
         .get_item("desc")?
         .and_then(|v| v.extract().ok());
@@ -446,6 +471,7 @@ fn read_http_route_meta(method: &Bound<'_, PyAny>) -> PyResult<Option<HttpRouteM
     Ok(Some(HttpRouteMeta {
         http_method: http_method.to_ascii_lowercase(),
         template,
+        tags_set,
         swagger: SwaggerMeta {
             tags,
             description,

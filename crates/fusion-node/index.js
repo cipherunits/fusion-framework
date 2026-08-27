@@ -134,7 +134,7 @@ header.fingerprint = () =>
     : {
         'X-Powered-By': 'Fusion Framework',
         'X-Framework': 'Fusion',
-        ['X-Fusion-Version']: '1.2.4',
+        ['X-Fusion-Version']: '1.2.5',
       }
 
 function isThenable(value) {
@@ -259,10 +259,13 @@ function resolveHandlerRoute(classBasePath, template, className, methodName) {
 }
 
 function httpRoute(method, route, options = {}) {
+  // tags unset → inherit class route tags; tags: [] clears; tags: [...] overrides.
+  const tagsSet = Object.prototype.hasOwnProperty.call(options, 'tags')
   const meta = {
     method: String(method).toLowerCase(),
     template: route,
-    tags: Array.isArray(options.tags) ? options.tags : [],
+    tagsSet,
+    tags: tagsSet ? (Array.isArray(options.tags) ? options.tags : []) : null,
     desc: options.desc ?? null,
     title: options.title ?? null,
     deprecated: !!options.deprecated,
@@ -272,6 +275,15 @@ function httpRoute(method, route, options = {}) {
     return fn
   }
   return wrap
+}
+
+function mergeSwagger(methodSwagger, classSwagger) {
+  return {
+    tags: methodSwagger.tagsSet ? methodSwagger.tags : classSwagger.tags,
+    description: methodSwagger.desc ?? classSwagger.description,
+    title: methodSwagger.title ?? classSwagger.title,
+    deprecated: !!(methodSwagger.deprecated || classSwagger.deprecated),
+  }
 }
 
 function httpGet(route, options = {}) {
@@ -311,12 +323,7 @@ function collectRouteSlots(ApiClass, classBasePath, classSwagger) {
       path: resolveHandlerRoute(classBasePath, meta.template, className, key),
       httpMethod: meta.method,
       handlerMethod: key,
-      swagger: {
-        tags: meta.tags,
-        description: meta.desc,
-        title: meta.title,
-        deprecated: meta.deprecated,
-      },
+      swagger: mergeSwagger(meta, classSwagger),
     })
   }
 
@@ -810,7 +817,12 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
   const showUrlInput = swagger.navbar?.showUrlInput !== false
   const hideUrlCss =
     navbarEnabled && !showUrlInput
-      ? `<style>.topbar form { display: none !important; }</style>`
+      ? `<style>
+      .swagger-ui .topbar .download-url-wrapper input[type=text],
+      .swagger-ui .topbar .download-url-wrapper .download-url-button {
+        display: none !important;
+      }
+    </style>`
       : ''
   const standaloneScript = navbarEnabled
     ? `<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>`

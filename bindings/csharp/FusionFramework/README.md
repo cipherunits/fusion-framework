@@ -15,8 +15,10 @@ Minimal managed bindings over the Rust core via `fusion-ffi`. DX mirrors Python/
 Requires .NET 8+ (this package targets `net10.0` by default; retarget as needed).
 
 ```bash
-dotnet add package FusionFramework
+dotnet add package Fusion-Framework
 ```
+
+NuGet package id is `Fusion-Framework`; the C# namespace remains `FusionFramework`.
 
 Native `fusion-ffi` is packed under `runtimes/<rid>/native/` in the NuGet package.
 For local development from this repo:

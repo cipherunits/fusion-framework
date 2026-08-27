@@ -1,4 +1,4 @@
-// Copy into your C# host Program.cs (requires FusionFramework reference).
+// Copy into your C# host Program.cs (requires Fusion-Framework NuGet / project reference).
 //
 // Routes:
 //   GET /api/user              -> Get()

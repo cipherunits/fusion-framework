@@ -2,20 +2,20 @@
   "version": 3,
   "targets": {
     "net10.0": {
-      "FusionFramework/1.2.3": {
+      "Fusion-Framework/1.2.4": {
         "type": "project",
         "framework": ".NETCoreApp,Version=v10.0",
         "compile": {
-          "bin/placeholder/FusionFramework.dll": {}
+          "bin/placeholder/Fusion-Framework.dll": {}
         },
         "runtime": {
-          "bin/placeholder/FusionFramework.dll": {}
+          "bin/placeholder/Fusion-Framework.dll": {}
         }
       }
     }
   },
   "libraries": {
-    "FusionFramework/1.2.3": {
+    "Fusion-Framework/1.2.4": {
       "type": "project",
       "path": "../../bindings/csharp/FusionFramework/FusionFramework.csproj",
       "msbuildProject": "../../bindings/csharp/FusionFramework/FusionFramework.csproj"
@@ -23,7 +23,7 @@
   },
   "projectFileDependencyGroups": {
     "net10.0": [
-      "FusionFramework >= 1.2.3"
+      "Fusion-Framework >= 1.2.4"
     ]
   },
   "packageFolders": {
