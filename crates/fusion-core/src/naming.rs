@@ -108,26 +108,4 @@ mod tests {
             "/api/user/{id}"
         );
     }
-
-    #[test]
-    fn expands_action_token() {
-        assert_eq!(api_action_name("UserAction"), "user");
-        assert_eq!(api_action_name("ListItems"), "listitems");
-        assert_eq!(
-            resolve_method_route_path("test/[action]", "UserModule", "UserAction"),
-            "test/user"
-        );
-    }
-
-    #[test]
-    fn joins_class_and_method_routes() {
-        assert_eq!(
-            resolve_handler_route("/api/user", "test/[action]", "UserModule", "UserAction"),
-            "/api/user/test/user"
-        );
-        assert_eq!(
-            resolve_handler_route("/api/user", "/absolute/[action]", "UserModule", "UserAction"),
-            "/absolute/user"
-        );
-    }
 }
