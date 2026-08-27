@@ -6,7 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>FusionFramework</RootNamespace>
     <AssemblyName>FusionFramework</AssemblyName>
-    <PackageId>FusionFramework</PackageId>
+    <PackageId>Fusion-Framework</PackageId>
     <Version>1.2.4</Version>
     <Authors>CipherUnits</Authors>
     <Company>CipherUnits</Company>
