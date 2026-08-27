@@ -45,6 +45,7 @@ public sealed class FusionApp : IDisposable
                     Path = mountSlot.Path,
                     Method = mountSlot.HttpMethod.ToUpperInvariant(),
                     Handler = mountSlot.Handler,
+                    Specs = mountSlot.Specs,
                     Global = _middleware.ToList(),
                 };
 
@@ -73,8 +74,9 @@ public sealed class FusionApp : IDisposable
                             {
                                 var instance = (FusionBaseApi)Activator.CreateInstance(s.Entry.ApiClass)!;
                                 instance.Request = r;
+                                var args = HandlerBinding.BindArgs(s.Handler, r, s.Specs);
                                 // Async methods return Task/ValueTask — RunChain unwraps them.
-                                return s.Handler.Invoke(instance, null);
+                                return s.Handler.Invoke(instance, args);
                             });
                         }
                         catch (TargetInvocationException tie) when (tie.InnerException is HttpException hex)

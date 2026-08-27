@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 from fusion_framework._fusion import HTTP_METHODS
+from fusion_framework.pagination import PaginationParams, paginated_body, parse_pagination
 
 
 class FusionBaseApi:
@@ -65,6 +66,43 @@ class FusionBaseApi:
         if hdrs:
             response["headers"] = hdrs
         return response
+
+    def pagination(
+        self,
+        *,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        offset: Optional[int] = None,
+        default_page_size: int = 20,
+        max_page_size: int = 100,
+    ) -> PaginationParams:
+        """Read pagination from query (handler kwargs override when passed)."""
+        return parse_pagination(
+            self.query,
+            page=page,
+            page_size=page_size,
+            offset=offset,
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
+        )
+
+    def paginated(
+        self,
+        items: Any,
+        total: int,
+        params: Optional[PaginationParams] = None,
+        *,
+        page: Optional[int] = None,
+        page_size: Optional[int] = None,
+        status: int = 200,
+        headers: Mapping[str, str] | None = None,
+        **extra: str,
+    ) -> dict[str, Any]:
+        """Return a paginated list response envelope."""
+        if params is None:
+            params = self.pagination(page=page, page_size=page_size)
+        body = paginated_body(items, total, params)
+        return self.response(body, status=status, headers=headers, **extra)
 
 
 __all__ = ["FusionBaseApi"]

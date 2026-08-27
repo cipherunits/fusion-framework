@@ -6,7 +6,8 @@ use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response,
     api_resource_name, attachment, cache_control, coerce_param, content_type, download,
     fingerprint_headers, inline, location, param_kind_from_name, resolve_route_path,
-    response_from_value, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES,
+    response_from_value, PageConfig, PageParams, paginated_body as core_paginated_body,
+    parse_page_params, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
@@ -344,4 +345,78 @@ pub fn header_download(
 #[napi]
 pub fn get_fingerprint_headers() -> std::collections::HashMap<String, String> {
     btree_to_hashmap(fingerprint_headers())
+}
+
+#[napi(object)]
+pub struct PaginationParams {
+    pub page: u32,
+    pub page_size: u32,
+    pub offset: u32,
+}
+
+impl From<PageParams> for PaginationParams {
+    fn from(p: PageParams) -> Self {
+        Self {
+            page: p.page as u32,
+            page_size: p.page_size as u32,
+            offset: p.offset as u32,
+        }
+    }
+}
+
+fn query_object_to_map(query: Object) -> Result<std::collections::HashMap<String, String>> {
+    let names = query.get_property_names()?;
+    let len = names.get_array_length()?;
+    let mut map = std::collections::HashMap::new();
+    for i in 0..len {
+        let name_val: Unknown = names.get_element(i)?;
+        let key = name_val.coerce_to_string()?.into_utf8()?.into_owned()?;
+        let value: Unknown = query.get_named_property(&key)?;
+        if value.get_type()? == ValueType::Undefined || value.get_type()? == ValueType::Null {
+            continue;
+        }
+        let s = value.coerce_to_string()?.into_utf8()?.into_owned()?;
+        map.insert(key, s);
+    }
+    Ok(map)
+}
+
+#[napi]
+pub fn parse_pagination(
+    query: Object,
+    default_page_size: Option<u32>,
+    max_page_size: Option<u32>,
+) -> Result<PaginationParams> {
+    let map = query_object_to_map(query)?;
+    let config = PageConfig {
+        default_page_size: default_page_size.unwrap_or(20) as u64,
+        max_page_size: max_page_size.unwrap_or(100) as u64,
+    };
+    let params = parse_page_params(&map, &config).map_err(|e| {
+        Error::new(
+            Status::InvalidArg,
+            e.detail
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("HTTP {}", e.status)),
+        )
+    })?;
+    Ok(params.into())
+}
+
+#[napi]
+pub fn paginated_body(
+    env: Env,
+    items: Unknown,
+    total: u32,
+    params: PaginationParams,
+) -> Result<Unknown> {
+    let items_json = js_to_json(items)?;
+    let page = PageParams {
+        page: params.page as u64,
+        page_size: params.page_size as u64,
+        offset: params.offset as u64,
+    };
+    let body = core_paginated_body(items_json, total as u64, &page);
+    json_to_js(&env, &body)
 }

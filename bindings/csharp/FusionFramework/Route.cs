@@ -26,6 +26,7 @@ internal sealed class RouteMountSlot
     public required string Path { get; init; }
     public required string HttpMethod { get; init; }
     public required MethodInfo Handler { get; init; }
+    public List<HandlerParamSpec> Specs { get; init; } = new();
     public string[] Tags { get; init; } = Array.Empty<string>();
     public string? Desc { get; init; }
     public string? Title { get; init; }
@@ -113,6 +114,7 @@ public static class Route
                 Path = ResolveHandlerRoute(classBasePath, httpAttr.Route, apiClass.Name, mi.Name),
                 HttpMethod = httpAttr.Method,
                 Handler = mi,
+                Specs = HandlerBinding.ExtractSpecs(mi),
                 Tags = httpAttr.Tags ?? classTags,
                 Desc = httpAttr.Desc ?? classDesc,
                 Title = httpAttr.Title ?? classTitle,
@@ -132,6 +134,7 @@ public static class Route
                 Path = classBasePath,
                 HttpMethod = methodName,
                 Handler = mi,
+                Specs = HandlerBinding.ExtractSpecs(mi),
                 Tags = classTags,
                 Desc = classDesc,
                 Title = classTitle,
@@ -251,6 +254,7 @@ internal sealed class RouteSlot
     public required string Path { get; init; }
     public required string Method { get; init; }
     public required MethodInfo Handler { get; init; }
+    public IReadOnlyList<HandlerParamSpec> Specs { get; init; } = Array.Empty<HandlerParamSpec>();
     public required IReadOnlyList<FusionMiddleware> Global { get; init; }
     public Native.FusionHandlerFn? KeptAlive { get; set; }
 }

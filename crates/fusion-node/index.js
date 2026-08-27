@@ -134,7 +134,7 @@ header.fingerprint = () =>
     : {
         'X-Powered-By': 'Fusion Framework',
         'X-Framework': 'Fusion',
-        ['X-Fusion-Version']: '1.2.5',
+        ['X-Fusion-Version']: '1.2.6',
       }
 
 function isThenable(value) {
@@ -207,6 +207,26 @@ class FusionBaseApi {
     const keys = headers ? Object.keys(headers) : []
     if (keys.length) out.headers = { ...headers }
     return out
+  }
+
+  pagination({
+    page,
+    pageSize,
+    offset,
+    defaultPageSize = 20,
+    maxPageSize = 100,
+  } = {}) {
+    const query = { ...(this.query || {}) }
+    if (page != null) query.page = String(page)
+    if (pageSize != null) query.page_size = String(pageSize)
+    if (offset != null) query.offset = String(offset)
+    return parsePagination(query, { defaultPageSize, maxPageSize })
+  }
+
+  paginated(items, total, params = null, { page, pageSize, status = 200, headers } = {}) {
+    const p = params ?? this.pagination({ page, pageSize })
+    const body = paginatedBody(items, total, p)
+    return this.response(body, status, headers || {})
   }
 }
 
@@ -973,6 +993,18 @@ function pathToFileUrl(filePath) {
   return require('url').pathToFileURL(resolved).href
 }
 
+function parsePagination(query, { defaultPageSize = 20, maxPageSize = 100 } = {}) {
+  try {
+    return native.parsePagination(query, defaultPageSize, maxPageSize)
+  } catch (err) {
+    throw new HTTPException(400, err?.message || 'invalid pagination')
+  }
+}
+
+function paginatedBody(items, total, params) {
+  return native.paginatedBody(items, total, params)
+}
+
 const route = router
 
 module.exports = {
@@ -1006,6 +1038,8 @@ module.exports = {
   frameworkHeaders,
   runMiddlewareChain,
   coerceParam,
+  parsePagination,
+  paginatedBody,
   getHttpMethods: () => HTTP_METHODS,
   apiResourceNameJs: native.apiResourceNameJs,
   resolveRoutePathJs: native.resolveRoutePathJs,

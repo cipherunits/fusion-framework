@@ -235,6 +235,7 @@ internal static class SwaggerDocs
 
                 var pathParams = PathParams(path);
                 var methodLower = slot.HttpMethod.ToLowerInvariant();
+                var methodUpper = slot.HttpMethod.ToUpperInvariant();
                 var parameters = new JsonArray();
                 foreach (var name in pathParams)
                 {
@@ -247,23 +248,95 @@ internal static class SwaggerDocs
                     });
                 }
 
+                var bodyProperties = new JsonObject();
+                var bodyRequired = new List<string>();
+                foreach (var spec in slot.Specs)
+                {
+                    var nullable = spec.Optional || spec.HasDefault;
+                    var required = !nullable;
+                    if (pathParams.Contains(spec.Name, StringComparer.Ordinal))
+                    {
+                        parameters.Add(new JsonObject
+                        {
+                            ["name"] = spec.Name,
+                            ["in"] = "path",
+                            ["required"] = required,
+                            ["schema"] = HandlerBinding.OpenApiSchema(spec.Kind, nullable),
+                        });
+                    }
+                    else if (methodUpper is "POST" or "PUT" or "PATCH")
+                    {
+                        bodyProperties[spec.Name] = HandlerBinding.OpenApiSchema(spec.Kind, nullable);
+                        if (required)
+                            bodyRequired.Add(spec.Name);
+                    }
+                    else
+                    {
+                        parameters.Add(new JsonObject
+                        {
+                            ["name"] = spec.Name,
+                            ["in"] = "query",
+                            ["required"] = required,
+                            ["schema"] = HandlerBinding.OpenApiSchema(spec.Kind, nullable),
+                        });
+                    }
+                }
+
                 var tags = new JsonArray();
                 foreach (var tag in slot.Tags)
                     tags.Add(tag);
 
-                methods[methodLower] = new JsonObject
+                var operation = new JsonObject
                 {
                     ["tags"] = tags,
                     ["summary"] = slot.Title ?? $"{entry.ApiClass.Name}.{slot.Handler.Name}",
                     ["description"] = slot.Desc ?? "",
                     ["deprecated"] = slot.Deprecated,
                     ["operationId"] = $"{entry.ApiClass.Name}_{slot.Handler.Name}",
-                    ["parameters"] = parameters,
                     ["responses"] = new JsonObject
                     {
-                        ["200"] = new JsonObject { ["description"] = "OK" },
+                        ["200"] = new JsonObject
+                        {
+                            ["description"] = "OK",
+                            ["content"] = new JsonObject
+                            {
+                                ["application/json"] = new JsonObject
+                                {
+                                    ["schema"] = new JsonObject { ["type"] = "object" },
+                                },
+                            },
+                        },
                     },
                 };
+
+                if (parameters.Count > 0)
+                    operation["parameters"] = parameters;
+
+                if (bodyProperties.Count > 0)
+                {
+                    var requiredArray = new JsonArray();
+                    foreach (var name in bodyRequired)
+                        requiredArray.Add(name);
+
+                    operation["requestBody"] = new JsonObject
+                    {
+                        ["required"] = bodyRequired.Count > 0,
+                        ["content"] = new JsonObject
+                        {
+                            ["application/json"] = new JsonObject
+                            {
+                                ["schema"] = new JsonObject
+                                {
+                                    ["type"] = "object",
+                                    ["properties"] = bodyProperties,
+                                    ["required"] = requiredArray,
+                                },
+                            },
+                        },
+                    };
+                }
+
+                methods[methodLower] = operation;
             }
         }
     }

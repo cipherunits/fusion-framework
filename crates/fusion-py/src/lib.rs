@@ -15,11 +15,13 @@ use serde_json::Value as JsonValue;
 
 mod api_types;
 mod json;
+mod pagination;
 
 use api_types::{
     PyFusionBaseApi, clear_registry, mount_routes, register_route,
 };
 use json::{json_to_py, py_to_json};
+use pagination::register_pagination;
 
 // ─── Settings (core) ─────────────────────────────────────────────────────────
 
@@ -494,6 +496,7 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_openapi_spec, m)?)?;
     m.add_function(wrap_pyfunction!(py_route_versions, m)?)?;
     m.add_function(wrap_pyfunction!(py_has_unversioned_routes, m)?)?;
+    register_pagination(m)?;
     m.add("HTTP_METHODS", HTTP_METHODS)?;
     add_status_module(m)?;
     add_header_module(m)?;

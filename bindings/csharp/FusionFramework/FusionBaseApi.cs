@@ -44,4 +44,34 @@ public abstract class FusionBaseApi
             envelope["headers"] = headers.ToDictionary(kv => kv.Key, kv => (object)kv.Value);
         return envelope;
     }
+
+    /// <summary>Read pagination from query (explicit args override query values).</summary>
+    public PaginationParams PageParams(
+        ulong? page = null,
+        ulong? pageSize = null,
+        ulong? offset = null,
+        ulong defaultPageSize = 20,
+        ulong maxPageSize = 100) =>
+        Pagination.Parse(
+            Request.Query,
+            page,
+            pageSize,
+            offset,
+            defaultPageSize,
+            maxPageSize);
+
+    /// <summary>Return a paginated list response envelope.</summary>
+    public object Paginated(
+        object items,
+        ulong total,
+        PaginationParams? parameters = null,
+        ulong? page = null,
+        ulong? pageSize = null,
+        int status = 200,
+        IDictionary<string, string>? headers = null)
+    {
+        var p = parameters ?? PageParams(page: page, pageSize: pageSize);
+        var body = Pagination.Body(items, total, p);
+        return Response(body, status, headers);
+    }
 }
