@@ -6,6 +6,7 @@ mod handler;
 mod headers;
 mod http_error;
 mod naming;
+mod pagination;
 mod request;
 mod response;
 mod router;
@@ -29,6 +30,9 @@ pub use http_error::HttpError;
 pub use naming::{
     HTTP_METHODS, api_action_name, api_resource_name, join_route_paths, resolve_handler_route,
     resolve_method_route_path, resolve_route_path,
+};
+pub use pagination::{
+    PageConfig, PageParams, paginate_slice, paginated_body, parse_page_params,
 };
 pub use request::{parse_query, Request};
 pub use response::Response;

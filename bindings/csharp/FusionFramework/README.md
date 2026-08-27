@@ -69,7 +69,32 @@ public class UserModule : FusionBaseApi
 }
 ```
 
+## Pagination
+
+List endpoints can use `PageParams()` / `Paginated()` on `FusionBaseApi`:
+
+```csharp
+public object Get()
+{
+    var p = PageParams(page: 2, pageSize: 10);
+    var items = FetchItems((int)p.Offset, (int)p.Limit);
+    return Paginated(items, total: 100, p);
+}
+```
+
+Query params: `page`, `page_size` (aliases: `per_page`, `limit`), optional `offset`.
+
 `[action]` becomes the handler name without an `Action` suffix, lowercased (`UserAction` → `user`).
+
+## Handler parameters
+
+Handler method parameters are bound automatically (Python parity):
+
+- **GET** (and other reads): from query string — `Get(string name)` → `?name=alice`
+- **POST/PUT/PATCH**: from JSON body — `Post(string name)` → `{ "name": "alice" }`
+- **Path tokens** `{id}`: from route params
+
+Parameters appear in Swagger OpenAPI docs.
 
 ```csharp
 MIDDLEWARE.Add(Middleware.BearerJwt());
