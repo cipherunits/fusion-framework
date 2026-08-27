@@ -223,10 +223,11 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str, primary_name: st
     show_url_input = bool(navbar.get("showUrlInput", True))
     hide_url_css = ""
     if navbar_enabled and not show_url_input:
-        # Keep the version <select>; hide only the free-text Explore box.
+        # Keep the version <select>; hide only the free-text Explore box + button.
         hide_url_css = """
     <style>
-      .topbar form { display: none !important; }
+      .swagger-ui .topbar .download-url-input,
+      .swagger-ui .topbar .download-url-button { display: none !important; }
     </style>"""
 
     standalone_script = ""

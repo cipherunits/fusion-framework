@@ -321,7 +321,8 @@ internal static class SwaggerDocs
         var hideUrlCss = navbarEnabled && !swagger.ShowUrlInput
             ? """
     <style>
-      .topbar form { display: none !important; }
+      .swagger-ui .topbar .download-url-input,
+      .swagger-ui .topbar .download-url-button { display: none !important; }
     </style>
 """
             : "";

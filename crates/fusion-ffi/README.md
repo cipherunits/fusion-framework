@@ -13,7 +13,7 @@ Optional: `export FUSION_FFI_PATH=/path/to/libfusion_ffi.so`
 
 ## Usage
 
-Prefer the managed wrapper: [`bindings/csharp/FusionFramework`](../../bindings/csharp/FusionFramework).
+Prefer the managed NuGet package **Fusion-Framework** (namespace `FusionFramework`): [`bindings/csharp/FusionFramework`](../../bindings/csharp/FusionFramework).
 
 Low-level surface: `fusion_app_*`, `fusion_settings_*`, `fusion_string_dup` / `fusion_string_free`, route helpers. Handler callbacks must return strings allocated with `fusion_string_dup`.
 

@@ -5,10 +5,10 @@
   },
   "projects": {
     "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj": {
-      "version": "1.2.3",
+      "version": "1.2.5",
       "restore": {
         "projectUniqueName": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj",
-        "projectName": "FusionFramework",
+        "projectName": "Fusion-Framework",
         "projectPath": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/FusionFramework.csproj",
         "packagesPath": "/home/ehsan/.nuget/packages/",
         "outputPath": "/home/ehsan/fusion-framework/bindings/csharp/FusionFramework/obj/",
