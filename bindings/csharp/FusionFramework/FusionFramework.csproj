@@ -7,7 +7,7 @@
     <RootNamespace>FusionFramework</RootNamespace>
     <AssemblyName>FusionFramework</AssemblyName>
     <PackageId>Fusion-Framework</PackageId>
-    <Version>1.2.6</Version>
+    <Version>1.3.0</Version>
     <Authors>CipherUnits</Authors>
     <Company>CipherUnits</Company>
     <Description>Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core</Description>

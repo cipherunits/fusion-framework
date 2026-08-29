@@ -30,7 +30,7 @@ class ItemModule(FusionBaseApi):
         return self.response({"id": id}, status=status.HTTP_SUCCESS)
 
 
-MIDDLEWARE: list = []  # your middleware; Fusion already adds framework_headers() by default
+MIDDLEWARE: list = []  # register with app.use() — see security_headers, cors, request_id, …
 
 
 def main() -> None:

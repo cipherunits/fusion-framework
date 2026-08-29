@@ -2,7 +2,18 @@
 
 from fusion_framework.config import settings
 from fusion_framework.http import HTTPException
-from fusion_framework.middleware import bearer_jwt, framework_headers, require_roles, use
+from fusion_framework.middleware import (
+    bearer_jwt,
+    cache_headers,
+    cors,
+    default_builtin_middleware,
+    framework_headers,
+    request_id,
+    require_roles,
+    security_headers,
+    use,
+)
+from fusion_framework.header_ops import add_header, delete_header
 from fusion_framework.pagination import PaginationParams, paginated_body, parse_pagination
 from . import header, status
 
@@ -15,6 +26,13 @@ __all__ = [
     "framework_headers",
     "require_roles",
     "use",
+    "security_headers",
+    "cors",
+    "cache_headers",
+    "request_id",
+    "default_builtin_middleware",
+    "add_header",
+    "delete_header",
     "PaginationParams",
     "parse_pagination",
     "paginated_body",

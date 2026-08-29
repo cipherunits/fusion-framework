@@ -6,7 +6,7 @@
   "compilationOptions": {},
   "targets": {
     ".NETCoreApp,Version=v10.0": {
-      "FusionFramework/1.2.0": {
+      "FusionFramework/1.2.6": {
         "runtime": {
           "FusionFramework.dll": {}
         }
@@ -14,7 +14,7 @@
     }
   },
   "libraries": {
-    "FusionFramework/1.2.0": {
+    "FusionFramework/1.2.6": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

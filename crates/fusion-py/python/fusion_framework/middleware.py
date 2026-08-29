@@ -199,7 +199,13 @@ def _merge_response_headers(result: Any, extra: dict[str, str]) -> Any:
     headers = result.get("headers")
     if not isinstance(headers, dict):
         headers = {}
-    merged = {**extra, **headers}  # handler wins on conflict
+    suppressed = {
+        str(n).lower()
+        for n in (result.get("suppress_headers") or [])
+        if n is not None and str(n)
+    }
+    filtered_extra = {k: v for k, v in extra.items() if str(k).lower() not in suppressed}
+    merged = {**filtered_extra, **headers}  # handler wins on conflict
     out = dict(result)
     out["headers"] = merged
     return out
@@ -241,13 +247,13 @@ def framework_headers() -> Middleware:
                     hdr, "FRAMEWORK_POWERED_BY", "Fusion Framework"
                 ),
                 getattr(hdr, "X_FRAMEWORK", "X-Framework"): getattr(hdr, "FRAMEWORK_ID", "Fusion"),
-                getattr(hdr, "X_FUSION_VERSION", "X-Fusion-Version"): "1.2.6",
+                getattr(hdr, "X_FUSION_VERSION", "X-Fusion-Version"): "1.3.0",
             }
         except Exception:
             extra = {
                 "X-Powered-By": "Fusion Framework",
                 "X-Framework": "Fusion",
-                "X-Fusion-Version": "1.2.6",
+                "X-Fusion-Version": "1.3.0",
             }
 
     def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
@@ -267,3 +273,38 @@ def dispatch_route(
     if _chain_needs_async(chain, handler):
         return run_chain(request, chain, handler)
     return _run_chain_sync(request, chain, handler)
+
+
+# Method-level header mutators live in header_ops; re-exported for convenience.
+from fusion_framework.header_ops import AddHeader, DeleteHeader, add_header, delete_header  # noqa: E402
+
+# Built-in middleware factories (implementation in builtin_middleware).
+from fusion_framework.builtin_middleware import (  # noqa: E402
+    cache_headers,
+    cors,
+    default_builtin_middleware,
+    request_id,
+    security_headers,
+)
+
+__all__ = [
+    "Middleware",
+    "use",
+    "set_active_global",
+    "get_active_global",
+    "clear_active_global",
+    "run_chain",
+    "require_roles",
+    "bearer_jwt",
+    "framework_headers",
+    "security_headers",
+    "cors",
+    "cache_headers",
+    "request_id",
+    "default_builtin_middleware",
+    "dispatch_route",
+    "add_header",
+    "delete_header",
+    "AddHeader",
+    "DeleteHeader",
+]

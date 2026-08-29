@@ -84,6 +84,48 @@ public object Get()
 
 Query params: `page`, `page_size` (aliases: `per_page`, `limit`), optional `offset`.
 
+## Built-in middleware & header ops
+
+Ready-made middleware (not enabled until you register them):
+
+- `security_headers` / `BuiltinMiddleware.SecurityHeaders` — nosniff, DENY framing, Referrer-Policy, Permissions-Policy, COOP/CORP (HSTS off unless enabled)
+- `cors` — configure `allow_origins`, …
+- `cache_headers` — optional default `Cache-Control`
+- `request_id` — `X-Request-Id` (+ `state["request_id"]`)
+- `framework_headers` — Fusion fingerprint headers
+
+Opt in explicitly:
+
+```python
+from fusion_framework.middleware import security_headers, request_id, default_builtin_middleware
+
+app = FusionApp(settings)
+app.use(security_headers())
+app.use(request_id())
+# or from fusion.<env>.json:
+for mw in default_builtin_middleware(settings):
+    app.use(mw)
+```
+
+C#:
+
+```csharp
+using var app = new FusionApp(SettingsStore.GetSettings());
+foreach (var mw in BuiltinMiddleware.FromSettings(SettingsStore.GetSettings()))
+    app.Use(mw);
+app.Listen();
+```
+
+Per-method:
+
+```csharp
+[DeleteHeader("X-Powered-By")]
+[AddHeader("Cache-Control", "no-store")]
+public object Get() => Response(new { ok = true });
+```
+
+See `examples/fusion.dev.json` and `examples/security_headers_demo.cs`.
+
 `[action]` becomes the handler name without an `Action` suffix, lowercased (`UserAction` → `user`).
 
 ## Handler parameters

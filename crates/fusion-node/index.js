@@ -134,7 +134,7 @@ header.fingerprint = () =>
     : {
         'X-Powered-By': 'Fusion Framework',
         'X-Framework': 'Fusion',
-        ['X-Fusion-Version']: '1.2.6',
+        ['X-Fusion-Version']: '1.3.0',
       }
 
 function isThenable(value) {
@@ -155,8 +155,123 @@ function mergeResponseHeaders(result, extra) {
   if (!result || typeof result !== 'object') {
     return { status: 200, body: result, headers: { ...extra } }
   }
-  const headers = { ...extra, ...(result.headers || {}) }
+  const suppressed = new Set(
+    (Array.isArray(result.suppress_headers) ? result.suppress_headers : []).map((n) =>
+      String(n).toLowerCase(),
+    ),
+  )
+  const filtered = {}
+  for (const [k, v] of Object.entries(extra || {})) {
+    if (!suppressed.has(String(k).toLowerCase())) filtered[k] = v
+  }
+  const headers = { ...filtered, ...(result.headers || {}) }
   return { ...result, headers }
+}
+
+function stripResponseHeaders(result, names) {
+  const drop = new Set(names.map((n) => String(n).toLowerCase()))
+  const out =
+    result && typeof result === 'object' && 'status' in result
+      ? { ...result }
+      : { status: 200, body: result }
+  if (out.headers && typeof out.headers === 'object') {
+    const headers = {}
+    for (const [k, v] of Object.entries(out.headers)) {
+      if (!drop.has(String(k).toLowerCase())) headers[k] = v
+    }
+    out.headers = headers
+  }
+  const suppressed = Array.isArray(out.suppress_headers) ? [...out.suppress_headers] : []
+  const seen = new Set(suppressed.map((s) => String(s).toLowerCase()))
+  for (const name of names) {
+    const key = String(name).toLowerCase()
+    if (!seen.has(key)) {
+      suppressed.push(String(name))
+      seen.add(key)
+    }
+  }
+  out.suppress_headers = suppressed
+  return out
+}
+
+function flattenHeaderMaps(...items) {
+  const out = {}
+  const strBuf = []
+  for (const item of items) {
+    if (item == null) continue
+    if (typeof item === 'object' && !Array.isArray(item)) {
+      for (const [k, v] of Object.entries(item)) out[String(k)] = v == null ? '' : String(v)
+    } else if (Array.isArray(item) && item.length === 2 && typeof item[0] !== 'object') {
+      out[String(item[0])] = item[1] == null ? '' : String(item[1])
+    } else if (typeof item === 'string') {
+      strBuf.push(item)
+    }
+  }
+  if (strBuf.length >= 2 && strBuf.length % 2 === 0) {
+    for (let i = 0; i < strBuf.length; i += 2) out[String(strBuf[i])] = String(strBuf[i + 1])
+  }
+  return out
+}
+
+function flattenHeaderNames(...items) {
+  const names = []
+  const seen = new Set()
+  const add = (name) => {
+    const key = String(name).toLowerCase()
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    names.push(String(name))
+  }
+  for (const item of items) {
+    if (item == null) continue
+    if (typeof item === 'string') add(item)
+    else if (typeof item === 'object' && !Array.isArray(item)) {
+      for (const k of Object.keys(item)) add(k)
+    } else if (Array.isArray(item)) {
+      if (item.length === 2 && typeof item[0] !== 'object') add(item[0])
+      else item.forEach((x) => (typeof x === 'string' ? add(x) : null))
+    }
+  }
+  return names
+}
+
+function wrapHeaderOp(fn, after) {
+  const wrapped = function (...args) {
+    const result = fn.apply(this, args)
+    return Promise.resolve(result).then(after)
+  }
+  for (const key of Object.keys(fn)) {
+    if (key.startsWith('__fusion')) wrapped[key] = fn[key]
+  }
+  if (fn.__fusionHttpRoute) wrapped.__fusionHttpRoute = fn.__fusionHttpRoute
+  return wrapped
+}
+
+/** Merge headers into the method response (wins over middleware). */
+function addHeader(...items) {
+  const headers = flattenHeaderMaps(...items)
+  return (fn) => {
+    const merged = { ...(fn.__fusionAddHeaders || {}), ...headers }
+    const wrapped = wrapHeaderOp(fn, (result) => {
+      if (!result || typeof result !== 'object') {
+        return { status: 200, body: result, headers: { ...merged } }
+      }
+      return { ...result, headers: { ...(result.headers || {}), ...merged } }
+    })
+    wrapped.__fusionAddHeaders = merged
+    return wrapped
+  }
+}
+
+/** Strip headers from the method response and suppress wire fingerprint re-add. */
+function deleteHeader(...items) {
+  const names = flattenHeaderNames(...items)
+  return (fn) => {
+    const merged = flattenHeaderNames(...(fn.__fusionDeleteHeaders || []), ...names)
+    const wrapped = wrapHeaderOp(fn, (result) => stripResponseHeaders(result, merged))
+    wrapped.__fusionDeleteHeaders = merged
+    return wrapped
+  }
 }
 
 function frameworkHeaders() {
@@ -166,6 +281,191 @@ function frameworkHeaders() {
     const result = await awaitMaybe(callNext(request))
     return mergeResponseHeaders(result, extra)
   }
+}
+
+function truthySetting(value, defaultValue = false) {
+  if (value == null) return defaultValue
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  if (typeof value === 'string') {
+    const s = value.trim().toLowerCase()
+    if (['', '0', 'false', 'off', 'no'].includes(s)) return false
+    if (['1', 'true', 'on', 'yes'].includes(s)) return true
+  }
+  return Boolean(value)
+}
+
+function settingsSection(name) {
+  const root = asObject(settings.get('middleware', {}))
+  if (root && root[name] && typeof root[name] === 'object') return asObject(root[name])
+  return asObject(settings.get(name, {}))
+}
+
+function asStringList(value, fallback = []) {
+  if (value == null) return [...fallback]
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
+  if (Array.isArray(value)) return value.map(String).filter(Boolean)
+  return [String(value)]
+}
+
+function securityHeaders(config = {}) {
+  const headers = {
+    'X-Content-Type-Options': String(config.content_type_options || config.x_content_type_options || 'nosniff'),
+    'X-Frame-Options': String(config.frame_options || config.x_frame_options || 'DENY'),
+    'Referrer-Policy': String(config.referrer_policy || 'strict-origin-when-cross-origin'),
+    'Permissions-Policy': String(
+      config.permissions_policy || 'camera=(), microphone=(), geolocation=(), payment=()',
+    ),
+    'X-XSS-Protection': String(config.xss_protection || '0'),
+    'Cross-Origin-Opener-Policy': String(config.coop || 'same-origin'),
+    'Cross-Origin-Resource-Policy': String(config.corp || 'same-origin'),
+  }
+  const csp = config.csp || config.content_security_policy
+  if (csp) headers['Content-Security-Policy'] = String(csp)
+  const hsts = config.hsts && typeof config.hsts === 'object' ? config.hsts : {}
+  if (truthySetting(hsts.enabled, false)) {
+    const maxAge = Number(hsts.max_age || 31536000)
+    const parts = [`max-age=${maxAge}`]
+    if (truthySetting(hsts.include_subdomains, true)) parts.push('includeSubDomains')
+    if (truthySetting(hsts.preload, false)) parts.push('preload')
+    headers['Strict-Transport-Security'] = parts.join('; ')
+  }
+  if (config.headers && typeof config.headers === 'object') {
+    for (const [k, v] of Object.entries(config.headers)) {
+      if (v == null) delete headers[k]
+      else headers[k] = String(v)
+    }
+  }
+  return async (request, callNext) => {
+    const result = await awaitMaybe(callNext(request))
+    return mergeResponseHeaders(result, headers)
+  }
+}
+
+function cors(config = {}) {
+  const allowOrigins = asStringList(config.allow_origins || config.origins, ['*'])
+  const allowMethods = asStringList(config.allow_methods, [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS',
+    'HEAD',
+  ])
+  const allowHeaders = asStringList(config.allow_headers, [
+    'Authorization',
+    'Content-Type',
+    'Accept',
+    'Origin',
+    'X-Request-Id',
+  ])
+  const exposeHeaders = asStringList(config.expose_headers, ['X-Request-Id'])
+  const allowCredentials = truthySetting(config.allow_credentials, false)
+  const maxAge = Number(config.max_age || 600)
+
+  function corsHeaders(origin) {
+    if (!allowOrigins.length) return null
+    const wildcard = allowOrigins.includes('*')
+    let allow
+    if (origin && (wildcard || allowOrigins.includes(origin))) {
+      allow = wildcard && !allowCredentials ? '*' : origin
+    } else if (wildcard && !allowCredentials) {
+      allow = '*'
+    } else {
+      return null
+    }
+    const headers = {
+      'Access-Control-Allow-Origin': allow,
+      'Access-Control-Allow-Methods': allowMethods.join(', '),
+      'Access-Control-Allow-Headers': allowHeaders.join(', '),
+      'Access-Control-Max-Age': String(maxAge),
+      Vary: 'Origin',
+    }
+    if (exposeHeaders.length) headers['Access-Control-Expose-Headers'] = exposeHeaders.join(', ')
+    if (allowCredentials) headers['Access-Control-Allow-Credentials'] = 'true'
+    return headers
+  }
+
+  return async (request, callNext) => {
+    const origin = request?.headers?.Origin || request?.headers?.origin || null
+    const hdrs = corsHeaders(origin)
+    const method = String(request?.method || '').toUpperCase()
+    if (method === 'OPTIONS') {
+      if (!hdrs) return { status: 403, body: { detail: 'CORS origin not allowed' } }
+      return { status: 204, body: '', headers: hdrs }
+    }
+    const result = await awaitMaybe(callNext(request))
+    return hdrs ? mergeResponseHeaders(result, hdrs) : result
+  }
+}
+
+function cacheHeaders(config = {}) {
+  const value = String(config.default || config.cache_control || 'no-store')
+  const extra = { 'Cache-Control': value }
+  if (config.pragma) extra.Pragma = String(config.pragma)
+  else if (value === 'no-store') extra.Pragma = 'no-cache'
+  return async (request, callNext) => {
+    const result = await awaitMaybe(callNext(request))
+    return mergeResponseHeaders(result, extra)
+  }
+}
+
+function requestId(config = {}) {
+  const headerName = String(config.header || 'X-Request-Id')
+  const acceptIncoming = truthySetting(config.incoming, true)
+  const stateKey = String(config.state_key || 'request_id')
+  return async (request, callNext) => {
+    const headers = request?.headers || {}
+    let rid = null
+    if (acceptIncoming) {
+      for (const [k, v] of Object.entries(headers)) {
+        if (String(k).toLowerCase() === headerName.toLowerCase()) {
+          rid = String(v)
+          break
+        }
+      }
+    }
+    if (!rid) {
+      rid =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID().replace(/-/g, '')
+          : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+    }
+    ensureState(request)[stateKey] = rid
+    const result = await awaitMaybe(callNext(request))
+    return mergeResponseHeaders(result, { [headerName]: rid })
+  }
+}
+
+function defaultBuiltinMiddleware() {
+  settings.ensureLoaded()
+  const root = asObject(settings.get('middleware', {}))
+  const enabled = (name, defaultOn) => {
+    const cfg = settingsSection(name)
+    if (Object.prototype.hasOwnProperty.call(cfg, 'enabled')) {
+      return [truthySetting(cfg.enabled, defaultOn), cfg]
+    }
+    if (root && Object.keys(root).length) return [defaultOn, cfg]
+    return [defaultOn, cfg]
+  }
+  const out = []
+  let cfg
+  let on
+  ;[on, cfg] = enabled('security', true)
+  if (on) out.push(securityHeaders(cfg))
+  ;[on, cfg] = enabled('cors', false)
+  if (on) out.push(cors(cfg))
+  ;[on, cfg] = enabled('cache', false)
+  if (on) out.push(cacheHeaders(cfg))
+  ;[on, cfg] = enabled('request_id', true)
+  if (on) out.push(requestId(cfg))
+  return out
 }
 
 class FusionBaseApi {
@@ -890,8 +1190,7 @@ class FusionApp {
     this.settings = getSettings()
     this.engine = new NativeApp()
     this.mounted = false
-    // Default: advertise Fusion to clients / Wappalyzer-style detectors.
-    this._middleware = [frameworkHeaders()]
+    this._middleware = []
   }
 
   use(middleware) {
@@ -1036,6 +1335,13 @@ module.exports = {
   bearerJwt,
   requireRoles,
   frameworkHeaders,
+  securityHeaders,
+  cors,
+  cacheHeaders,
+  requestId,
+  defaultBuiltinMiddleware,
+  addHeader,
+  deleteHeader,
   runMiddlewareChain,
   coerceParam,
   parsePagination,

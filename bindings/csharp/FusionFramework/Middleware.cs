@@ -201,10 +201,22 @@ public static class Middleware
 
     internal static object MergeResponseHeaders(object? result, IReadOnlyDictionary<string, string> extra)
     {
+        var suppressed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (result is Dictionary<string, object?> probe
+            && probe.TryGetValue("suppress_headers", out var raw)
+            && raw is IEnumerable<string> names)
+        {
+            foreach (var n in names) suppressed.Add(n);
+        }
+
         if (result is Dictionary<string, object?> dict)
         {
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in extra) headers[kv.Key] = kv.Value;
+            foreach (var kv in extra)
+            {
+                if (!suppressed.Contains(kv.Key))
+                    headers[kv.Key] = kv.Value;
+            }
             if (dict.TryGetValue("headers", out var existing) && existing is IDictionary<string, string> map)
             {
                 foreach (var kv in map) headers[kv.Key] = kv.Value;
@@ -213,11 +225,17 @@ public static class Middleware
             return dict;
         }
 
+        var seeded = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in extra)
+        {
+            if (!suppressed.Contains(kv.Key))
+                seeded[kv.Key] = kv.Value;
+        }
         return new Dictionary<string, object?>
         {
             ["status"] = 200,
             ["body"] = result,
-            ["headers"] = new Dictionary<string, string>(extra, StringComparer.OrdinalIgnoreCase),
+            ["headers"] = seeded,
         };
     }
 

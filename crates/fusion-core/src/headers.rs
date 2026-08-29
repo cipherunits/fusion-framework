@@ -50,10 +50,20 @@ pub const WARNING: &str = "Warning";
 pub const WWW_AUTHENTICATE: &str = "WWW-Authenticate";
 pub const X_CONTENT_TYPE_OPTIONS: &str = "X-Content-Type-Options";
 pub const X_FRAME_OPTIONS: &str = "X-Frame-Options";
+pub const X_XSS_PROTECTION: &str = "X-XSS-Protection";
 pub const X_REQUESTED_WITH: &str = "X-Requested-With";
 pub const X_FORWARDED_FOR: &str = "X-Forwarded-For";
 pub const X_FORWARDED_PROTO: &str = "X-Forwarded-Proto";
 pub const X_REAL_IP: &str = "X-Real-IP";
+pub const X_REQUEST_ID: &str = "X-Request-Id";
+pub const X_CORRELATION_ID: &str = "X-Correlation-Id";
+pub const STRICT_TRANSPORT_SECURITY: &str = "Strict-Transport-Security";
+pub const REFERRER_POLICY: &str = "Referrer-Policy";
+pub const PERMISSIONS_POLICY: &str = "Permissions-Policy";
+pub const CONTENT_SECURITY_POLICY: &str = "Content-Security-Policy";
+pub const CROSS_ORIGIN_OPENER_POLICY: &str = "Cross-Origin-Opener-Policy";
+pub const CROSS_ORIGIN_RESOURCE_POLICY: &str = "Cross-Origin-Resource-Policy";
+pub const CROSS_ORIGIN_EMBEDDER_POLICY: &str = "Cross-Origin-Embedder-Policy";
 pub const ACCESS_CONTROL_ALLOW_ORIGIN: &str = "Access-Control-Allow-Origin";
 pub const ACCESS_CONTROL_ALLOW_METHODS: &str = "Access-Control-Allow-Methods";
 pub const ACCESS_CONTROL_ALLOW_HEADERS: &str = "Access-Control-Allow-Headers";
@@ -90,8 +100,26 @@ pub fn fingerprint_header_pairs() -> [(&'static str, String); 3] {
 }
 
 /// Insert fingerprint headers if the response does not already set them.
+///
+/// Names listed in ``suppress`` (case-insensitive) are never re-added — used by
+/// ``@delete_header`` / ``[DeleteHeader]`` so wire-level fingerprint does not
+/// undo intentional removals.
 pub fn apply_fingerprint_headers(headers: &mut Vec<(String, String)>) {
+    apply_fingerprint_headers_except(headers, &[]);
+}
+
+/// Like [`apply_fingerprint_headers`], but skips names present in ``suppress``.
+pub fn apply_fingerprint_headers_except(
+    headers: &mut Vec<(String, String)>,
+    suppress: &[String],
+) {
     for (name, value) in fingerprint_header_pairs() {
+        if suppress
+            .iter()
+            .any(|s| s.eq_ignore_ascii_case(name))
+        {
+            continue;
+        }
         let exists = headers
             .iter()
             .any(|(n, _)| n.eq_ignore_ascii_case(name));
@@ -177,10 +205,20 @@ pub const HTTP_HEADER_CONSTANTS: &[(&str, &str)] = &[
     ("WWW_AUTHENTICATE", WWW_AUTHENTICATE),
     ("X_CONTENT_TYPE_OPTIONS", X_CONTENT_TYPE_OPTIONS),
     ("X_FRAME_OPTIONS", X_FRAME_OPTIONS),
+    ("X_XSS_PROTECTION", X_XSS_PROTECTION),
     ("X_REQUESTED_WITH", X_REQUESTED_WITH),
     ("X_FORWARDED_FOR", X_FORWARDED_FOR),
     ("X_FORWARDED_PROTO", X_FORWARDED_PROTO),
     ("X_REAL_IP", X_REAL_IP),
+    ("X_REQUEST_ID", X_REQUEST_ID),
+    ("X_CORRELATION_ID", X_CORRELATION_ID),
+    ("STRICT_TRANSPORT_SECURITY", STRICT_TRANSPORT_SECURITY),
+    ("REFERRER_POLICY", REFERRER_POLICY),
+    ("PERMISSIONS_POLICY", PERMISSIONS_POLICY),
+    ("CONTENT_SECURITY_POLICY", CONTENT_SECURITY_POLICY),
+    ("CROSS_ORIGIN_OPENER_POLICY", CROSS_ORIGIN_OPENER_POLICY),
+    ("CROSS_ORIGIN_RESOURCE_POLICY", CROSS_ORIGIN_RESOURCE_POLICY),
+    ("CROSS_ORIGIN_EMBEDDER_POLICY", CROSS_ORIGIN_EMBEDDER_POLICY),
     ("ACCESS_CONTROL_ALLOW_ORIGIN", ACCESS_CONTROL_ALLOW_ORIGIN),
     ("ACCESS_CONTROL_ALLOW_METHODS", ACCESS_CONTROL_ALLOW_METHODS),
     ("ACCESS_CONTROL_ALLOW_HEADERS", ACCESS_CONTROL_ALLOW_HEADERS),

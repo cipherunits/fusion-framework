@@ -16,7 +16,7 @@ use tokio::net::TcpListener;
 use tokio::signal;
 
 use crate::error::{Error, Result};
-use crate::headers::apply_fingerprint_headers;
+use crate::headers::apply_fingerprint_headers_except;
 use crate::request::{parse_query, Request};
 use crate::response::Response;
 use crate::router::Router;
@@ -180,7 +180,7 @@ async fn handle_request(
 
     let mut response = router.dispatch(request).await;
     if options.fingerprint {
-        apply_fingerprint_headers(&mut response.headers);
+        apply_fingerprint_headers_except(&mut response.headers, &response.suppress_headers);
     }
 
     let path_color = style(&path).blue().force_styling(true);

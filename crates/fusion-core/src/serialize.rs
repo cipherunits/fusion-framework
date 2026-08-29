@@ -49,6 +49,11 @@ pub fn is_response_envelope(map: &Map<String, Value>) -> bool {
                 }
                 has_headers = true;
             }
+            "suppress_headers" => {
+                if !value.is_array() && !value.is_null() {
+                    return false;
+                }
+            }
             _ => return false,
         }
     }
@@ -79,6 +84,18 @@ fn response_from_envelope(map: Map<String, Value>) -> Response {
                 other => other.to_string(),
             };
             response.headers.push((name.clone(), header_value));
+        }
+    }
+
+    // Optional envelope key used by @delete_header / [DeleteHeader] so wire
+    // fingerprint does not re-add intentionally removed identity headers.
+    if let Some(Value::Array(names)) = map.get("suppress_headers") {
+        for name in names {
+            if let Some(s) = name.as_str() {
+                if !s.is_empty() {
+                    response.suppress_headers.push(s.to_string());
+                }
+            }
         }
     }
 

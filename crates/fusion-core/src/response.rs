@@ -5,6 +5,8 @@ pub struct Response {
     pub status: u16,
     pub headers: Vec<(String, String)>,
     pub body: Bytes,
+    /// Header names that must not be re-injected by wire-level fingerprinting.
+    pub suppress_headers: Vec<String>,
 }
 
 impl Response {
@@ -13,6 +15,7 @@ impl Response {
             status,
             headers: Vec::new(),
             body: body.into(),
+            suppress_headers: Vec::new(),
         }
     }
 
