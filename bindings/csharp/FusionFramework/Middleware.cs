@@ -53,32 +53,32 @@ public static class Middleware
                 case null:
                     return null;
                 case Task task:
-                {
-                    task.ConfigureAwait(false).GetAwaiter().GetResult();
-                    var t = task.GetType();
-                    if (t.IsGenericType)
                     {
-                        result = t.GetProperty("Result")?.GetValue(task);
-                        continue;
-                    }
-                    return null;
-                }
-                default:
-                {
-                    var type = result.GetType();
-                    if (type == typeof(ValueTask))
-                    {
-                        ((ValueTask)result).ConfigureAwait(false).GetAwaiter().GetResult();
+                        task.ConfigureAwait(false).GetAwaiter().GetResult();
+                        var t = task.GetType();
+                        if (t.IsGenericType)
+                        {
+                            result = t.GetProperty("Result")?.GetValue(task);
+                            continue;
+                        }
                         return null;
                     }
-                    if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>))
+                default:
                     {
-                        // ValueTask<T> → Task<T> then unwrap on next iteration.
-                        result = type.GetMethod("AsTask")!.Invoke(result, null);
-                        continue;
+                        var type = result.GetType();
+                        if (type == typeof(ValueTask))
+                        {
+                            ((ValueTask)result).ConfigureAwait(false).GetAwaiter().GetResult();
+                            return null;
+                        }
+                        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(ValueTask<>))
+                        {
+                            // ValueTask<T> → Task<T> then unwrap on next iteration.
+                            result = type.GetMethod("AsTask")!.Invoke(result, null);
+                            continue;
+                        }
+                        return result;
                     }
-                    return result;
-                }
             }
         }
 

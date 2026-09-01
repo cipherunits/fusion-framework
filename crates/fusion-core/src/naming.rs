@@ -6,17 +6,9 @@ pub const HTTP_METHODS: &[&str] = &["get", "post", "put", "patch", "delete", "he
 /// `MyFirstModule` → `myfirst`; names without a `Module`/`MODULE` suffix are lowercased as-is.
 pub fn api_resource_name(class_name: &str) -> String {
     let stem = if let Some(stem) = class_name.strip_suffix("Module") {
-        if !stem.is_empty() {
-            stem
-        } else {
-            class_name
-        }
+        if !stem.is_empty() { stem } else { class_name }
     } else if let Some(stem) = class_name.strip_suffix("MODULE") {
-        if !stem.is_empty() {
-            stem
-        } else {
-            class_name
-        }
+        if !stem.is_empty() { stem } else { class_name }
     } else {
         class_name
     };
@@ -26,17 +18,9 @@ pub fn api_resource_name(class_name: &str) -> String {
 /// `UserAction` → `user`; strips trailing `Action` / `ACTION` then lowercases.
 pub fn api_action_name(method_name: &str) -> String {
     let stem = if let Some(stem) = method_name.strip_suffix("Action") {
-        if !stem.is_empty() {
-            stem
-        } else {
-            method_name
-        }
+        if !stem.is_empty() { stem } else { method_name }
     } else if let Some(stem) = method_name.strip_suffix("ACTION") {
-        if !stem.is_empty() {
-            stem
-        } else {
-            method_name
-        }
+        if !stem.is_empty() { stem } else { method_name }
     } else {
         method_name
     };
@@ -61,7 +45,11 @@ pub fn join_route_paths(base: &str, segment: &str) -> String {
     let base = base.trim_end_matches('/');
     let segment = segment.trim_matches('/');
     if segment.is_empty() {
-        return if base.is_empty() { "/".into() } else { base.to_string() };
+        return if base.is_empty() {
+            "/".into()
+        } else {
+            base.to_string()
+        };
     }
     if base.is_empty() {
         return format!("/{segment}");

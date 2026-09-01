@@ -3,10 +3,10 @@ use std::sync::Mutex;
 
 use bytes::Bytes;
 use fusion_core::{
-    App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
-    api_resource_name, attachment, cache_control, coerce_param, content_type, download, inline,
-    location, param_kind_from_name, response_from_value, HTTP_HEADER_CONSTANTS, HTTP_METHODS,
-    HTTP_STATUS_CODES,
+    App as CoreApp, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, Handler, HandlerFuture,
+    Request, Response, Settings as CoreSettings, api_resource_name, attachment, cache_control,
+    coerce_param, content_type, download, inline, location, param_kind_from_name, render_template,
+    response_from_value,
 };
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
@@ -17,9 +17,7 @@ mod api_types;
 mod json;
 mod pagination;
 
-use api_types::{
-    PyFusionBaseApi, clear_registry, mount_routes, register_route,
-};
+use api_types::{PyFusionBaseApi, clear_registry, mount_routes, register_route};
 use json::{json_to_py, py_to_json};
 use pagination::register_pagination;
 
@@ -248,9 +246,7 @@ fn invoke_handler_start(py: Python<'_>, callback: &PyObject, req: Request) -> Py
 
     // Real async: leave awaitables for the shared event loop.
     let inspect = py.import("inspect")?;
-    let is_awaitable: bool = inspect
-        .call_method1("isawaitable", (bound,))?
-        .extract()?;
+    let is_awaitable: bool = inspect.call_method1("isawaitable", (bound,))?.extract()?;
     if is_awaitable {
         return Ok(PyOutcome::Pending(result));
     }
@@ -317,7 +313,6 @@ async fn invoke_handler_async(callback: PyObject, req: Request) -> PyResult<Resp
     }
 }
 
-
 #[pyclass(name = "App")]
 struct PyApp {
     inner: Mutex<CoreApp>,
@@ -346,8 +341,8 @@ impl PyApp {
     }
 
     fn listen(&self, py: Python<'_>, host: &str, port: u16) -> PyResult<()> {
-        use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
 
         let app = {
             let guard = self
@@ -376,7 +371,9 @@ impl PyApp {
             if interrupted.load(Ordering::SeqCst) {
                 server.abort();
                 drop(runtime);
-                return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err("Interrupted"));
+                return Err(pyo3::exceptions::PyKeyboardInterrupt::new_err(
+                    "Interrupted",
+                ));
             }
             if server.is_finished() {
                 break;
@@ -428,14 +425,7 @@ fn py_register_route(
         .map(|m| m.into_bound(py).into_any().unbind())
         .collect();
     register_route(
-        template,
-        api_cls,
-        tags,
-        desc,
-        title,
-        version,
-        deprecated,
-        middleware,
+        template, api_cls, tags, desc, title, version, deprecated, middleware,
     )
 }
 
@@ -482,6 +472,31 @@ fn py_coerce_param(py: Python<'_>, raw: &str, kind: &str) -> PyResult<PyObject> 
     json_to_py(py, &value)
 }
 
+#[pyfunction(name = "render_template")]
+#[pyo3(signature = (template_name, context=None, templates_root=None))]
+fn py_render_template(
+    py: Python<'_>,
+    template_name: &str,
+    context: Option<Bound<'_, PyDict>>,
+    templates_root: Option<&str>,
+) -> PyResult<String> {
+    use std::path::PathBuf;
+
+    let ctx = match context {
+        Some(d) => py_to_json(py, d.as_any())?,
+        None => serde_json::Value::Object(serde_json::Map::new()),
+    };
+    let root = PathBuf::from(templates_root.unwrap_or("templates"));
+    render_template(template_name, &ctx, &root)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))
+}
+
+#[pyfunction(name = "prefers_json")]
+#[pyo3(signature = (accept=None, format_query=None))]
+fn py_prefers_json(accept: Option<&str>, format_query: Option<&str>) -> bool {
+    fusion_core::prefers_json(accept, format_query)
+}
+
 #[pymodule]
 fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
@@ -490,6 +505,8 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_api_resource_name, m)?)?;
     m.add_function(wrap_pyfunction!(py_resolve_route_path, m)?)?;
     m.add_function(wrap_pyfunction!(py_coerce_param, m)?)?;
+    m.add_function(wrap_pyfunction!(py_render_template, m)?)?;
+    m.add_function(wrap_pyfunction!(py_prefers_json, m)?)?;
     m.add_function(wrap_pyfunction!(py_register_route, m)?)?;
     m.add_function(wrap_pyfunction!(clear_routes, m)?)?;
     m.add_function(wrap_pyfunction!(http_error_to_response, m)?)?;
@@ -532,7 +549,10 @@ fn add_status_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-fn btree_to_pydict(py: Python<'_>, map: &std::collections::BTreeMap<String, String>) -> PyResult<Py<PyDict>> {
+fn btree_to_pydict(
+    py: Python<'_>,
+    map: &std::collections::BTreeMap<String, String>,
+) -> PyResult<Py<PyDict>> {
     let dict = PyDict::new(py);
     for (k, v) in map {
         dict.set_item(k, v)?;

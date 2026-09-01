@@ -186,6 +186,12 @@ internal static class Native
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     public static extern IntPtr fusion_fingerprint_headers();
 
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_render_template(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string templateName,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string contextJson,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? templatesRoot);
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr FusionHandlerFn(
         IntPtr userData,

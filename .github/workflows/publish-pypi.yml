@@ -1,9 +1,7 @@
 name: Publish PyPI
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
   workflow_dispatch:
 
 # Trusted Publishing via OIDC — no PYPI_API_TOKEN secret needed.

@@ -102,10 +102,7 @@ pub fn coerce_value(raw: &Value, kind: ParamKind) -> Result<Value, HttpError> {
 }
 
 /// Bind handler arguments: path first, then query (read) or JSON body (write).
-pub fn bind_args(
-    specs: &[ParamSpec],
-    req: &Request,
-) -> Result<HashMap<String, Value>, HttpError> {
+pub fn bind_args(specs: &[ParamSpec], req: &Request) -> Result<HashMap<String, Value>, HttpError> {
     let http_method = req.method.to_ascii_uppercase();
     let body_fields = if BODY_METHODS.contains(&http_method.as_str()) {
         parse_json_object(&req.body_str())
@@ -156,11 +153,7 @@ pub fn bind_args(
 }
 
 /// Build a framework response envelope from parts.
-pub fn build_response(
-    body: Value,
-    status: u16,
-    headers: HashMap<String, String>,
-) -> Value {
+pub fn build_response(body: Value, status: u16, headers: HashMap<String, String>) -> Value {
     let mut hdrs = headers;
     if !body.is_string() && !body.is_null() {
         hdrs.entry("content-type".into())
@@ -226,10 +219,7 @@ mod tests {
         }];
         let request = req("GET", &[], &[("q", "hello")], "");
         let args = bind_args(&specs, &request).unwrap();
-        assert_eq!(
-            args.get("q"),
-            Some(&Value::String("hello".into()))
-        );
+        assert_eq!(args.get("q"), Some(&Value::String("hello".into())));
     }
 
     #[test]
@@ -242,10 +232,7 @@ mod tests {
         }];
         let request = req("POST", &[], &[], r#"{"name":"alice"}"#);
         let args = bind_args(&specs, &request).unwrap();
-        assert_eq!(
-            args.get("name"),
-            Some(&Value::String("alice".into()))
-        );
+        assert_eq!(args.get("name"), Some(&Value::String("alice".into())));
     }
 
     #[test]

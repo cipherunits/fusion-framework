@@ -1,9 +1,7 @@
 name: Publish NuGet
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_call:
   workflow_dispatch:
 
 # Trusted Publishing via OIDC — no NUGET_API_KEY secret needed.

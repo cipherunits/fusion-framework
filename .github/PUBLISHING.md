@@ -1,16 +1,26 @@
 # Secrets & publishing
 
-Release by pushing a version tag:
+## Branch flow
+
+- **`dev`** — day-to-day development; the `CI` workflow (lint + tests) runs on push and PRs.
+- **`main`** — release branch; merge `dev` → `main` after bumping versions with `scripts/set-version.sh`.
+- **`publish.yml`** — runs on push to `main` and on `v*` tags; publishes PyPI, npm, and NuGet packages.
+
+## Release
+
+Bump versions, merge to `main`, or push a version tag:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+./scripts/set-version.sh 1.2.7
+git tag v1.2.7
+git push origin main --tags
 ```
 
-That triggers:
+That triggers `publish.yml`, which calls:
 
 - `publish-pypi.yml` → PyPI package `fusion-framework`
 - `publish-npm.yml` → npm package `fusion-framework`
+- `publish-nuget.yml` → NuGet package `Fusion-Framework`
 
 ## Required GitHub configuration
 

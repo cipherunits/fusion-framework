@@ -1,0 +1,24 @@
+{# Fusion built-in UI components (Tera 2). Use: {{<fusion.button label="Save" variant="primary" />}} #}
+
+{% component fusion.button(label: string, href: string = "", variant: string = "primary", type: string = "button") %}
+<button type="{{ type }}" class="fusion-btn fusion-btn--{{ variant }}"{% if href and type != "submit" %} onclick="window.location.href='{{ href }}'"{% endif %}>{{ label }}</button>
+{% endcomponent fusion.button %}
+
+{% component fusion.link(label: string, href: string = "#", variant: string = "default") %}
+<a href="{{ href }}" class="fusion-link fusion-link--{{ variant }}">{{ label }}</a>
+{% endcomponent fusion.link %}
+
+{% component fusion.card(title: string = "", content: string = "") %}
+<div class="fusion-card">
+  {% if title %}<h3 class="fusion-card__title">{{ title }}</h3>{% endif %}
+  <div class="fusion-card__body">{{ content | safe }}</div>
+</div>
+{% endcomponent fusion.card %}
+
+{% component fusion.alert(message: string, variant: string = "info") %}
+<div class="fusion-alert fusion-alert--{{ variant }}" role="alert">{{ message }}</div>
+{% endcomponent fusion.alert %}
+
+{% component fusion.badge(label: string, variant: string = "default") %}
+<span class="fusion-badge fusion-badge--{{ variant }}">{{ label }}</span>
+{% endcomponent fusion.badge %}

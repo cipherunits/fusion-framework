@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
-from fusion_framework._fusion import HTTP_METHODS
+from fusion_framework._fusion import HTTP_METHODS, prefers_json as _prefers_json
 from fusion_framework.pagination import PaginationParams, paginated_body, parse_pagination
 
 
@@ -47,6 +47,16 @@ class FusionBaseApi:
     @property
     def state(self) -> Mapping[str, Any]:
         return self.request.get("state") or {}
+
+    def wants_json(self) -> bool:
+        """True when the client prefers JSON (``Accept`` or ``?format=json``)."""
+        accept = None
+        for key, value in self.headers.items():
+            if key.lower() == "accept":
+                accept = str(value)
+                break
+        fmt = self.query.get("format")
+        return _prefers_json(accept, fmt)
 
     def response(
         self,

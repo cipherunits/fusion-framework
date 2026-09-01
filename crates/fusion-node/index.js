@@ -228,6 +228,93 @@ class FusionBaseApi {
     const body = paginatedBody(items, total, p)
     return this.response(body, status, headers || {})
   }
+
+  wantsJson() {
+    let accept = null
+    for (const [key, value] of Object.entries(this.headers || {})) {
+      if (key.toLowerCase() === 'accept') {
+        accept = String(value)
+        break
+      }
+    }
+    const format = this.query?.format != null ? String(this.query.format) : null
+    return typeof native.prefersJsonJs === 'function'
+      ? native.prefersJsonJs(accept, format)
+      : prefersJsonFallback(accept, format)
+  }
+}
+
+function prefersJsonFallback(accept, formatQuery) {
+  if (formatQuery && String(formatQuery).toLowerCase() === 'json') return true
+  const value = String(accept || '').trim().toLowerCase()
+  if (!value) return false
+  let bestJson = -1
+  let bestHtml = -1
+  for (const part of value.split(',')) {
+    const tokens = part.trim().split(';').map((t) => t.trim())
+    const media = tokens[0] || ''
+    let q = 1
+    for (const token of tokens.slice(1)) {
+      if (token.startsWith('q=')) {
+        const parsed = Number.parseFloat(token.slice(2))
+        if (!Number.isNaN(parsed)) q = parsed
+      }
+    }
+    if (media === 'application/json' || media === 'text/json') bestJson = Math.max(bestJson, q)
+    else if (media === 'text/html' || media === 'application/xhtml+xml') bestHtml = Math.max(bestHtml, q)
+  }
+  return bestJson > 0 && bestJson >= bestHtml
+}
+
+class FusionBaseTemplate extends FusionBaseApi {
+  static template = ''
+  static templateAddress = ''
+  static templatesDir = ''
+
+  context() {
+    return {}
+  }
+
+  get() {
+    if (this.wantsJson()) return this.context()
+    return this.render()
+  }
+
+  templateName() {
+    const name = this.constructor.template || this.constructor.templateAddress
+    if (!name) {
+      throw new Error(`${this.constructor.name} must set static template or templateAddress`)
+    }
+    return name
+  }
+
+  templatesRoot() {
+    if (this.constructor.templatesDir) return this.constructor.templatesDir
+    return String(settings.get('templates.dir', 'templates'))
+  }
+
+  render({
+    status = 200,
+    headers = {},
+    context = null,
+    templateName = null,
+  } = {}) {
+    const ctx = { ...this.context(), ...(context || {}) }
+    const html = renderTemplate(
+      templateName || this.templateName(),
+      ctx,
+      this.templatesRoot(),
+    )
+    return this.response(html, status, {
+      'content-type': 'text/html; charset=utf-8',
+      ...headers,
+    })
+  }
+}
+
+function renderTemplate(templateName, context = {}, templatesRoot = null) {
+  const root = templatesRoot ?? String(settings.get('templates.dir', 'templates'))
+  return native.renderTemplateJs(templateName, context || {}, root)
 }
 
 function apiResourceName(cls) {
@@ -653,7 +740,7 @@ function readSwaggerSettings() {
     showCommonExtensions: false,
     syntaxHighlight: { activated: true, theme: 'agate' },
     withCredentials: false,
-    validatorUrl: 'https://validator.swagger.io/validator',
+    validatorUrl: null,
     ...asObject(settings.get('swagger.ui', {})),
   }
   if (Object.prototype.hasOwnProperty.call(authRaw, 'persistAuthorization')) {
@@ -681,6 +768,40 @@ function readSwaggerSettings() {
 }
 
 const UNVERSIONED_SWAGGER_NAME = 'default'
+
+const SWAGGER_ASSETS_DIR = path.join(__dirname, 'static', 'swagger-ui')
+const SWAGGER_ASSET_TYPES = {
+  'swagger-ui-bundle.js': 'application/javascript; charset=utf-8',
+  'swagger-ui-standalone-preset.js': 'application/javascript; charset=utf-8',
+  'swagger-ui.css': 'text/css; charset=utf-8',
+}
+
+function loadSwaggerAssets() {
+  const out = {}
+  for (const [name, contentType] of Object.entries(SWAGGER_ASSET_TYPES)) {
+    const filePath = path.join(SWAGGER_ASSETS_DIR, name)
+    if (!fs.existsSync(filePath)) continue
+    out[name] = { contentType, body: fs.readFileSync(filePath, 'utf8') }
+  }
+  return out
+}
+
+const SWAGGER_ASSETS = loadSwaggerAssets()
+
+function swaggerAssetUrl(prefix, name) {
+  return `${prefix}/assets/${name}`
+}
+
+function mountSwaggerAssets(engine, prefix) {
+  const assetsPrefix = `${prefix}/assets`
+  for (const [name, { contentType, body }] of Object.entries(SWAGGER_ASSETS)) {
+    engine.route('GET', `${assetsPrefix}/${name}`, () => ({
+      status: 200,
+      body,
+      headers: { 'content-type': contentType },
+    }))
+  }
+}
 
 function normalizeVersionLabel(value) {
   return String(value || '')
@@ -845,7 +966,7 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
     </style>`
       : ''
   const standaloneScript = navbarEnabled
-    ? `<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>`
+    ? `<script src="${swaggerAssetUrl(swagger.path, 'swagger-ui-standalone-preset.js')}"></script>`
     : ''
 
   return `<!doctype html>
@@ -854,12 +975,12 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title}</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+    <link rel="stylesheet" href="${swaggerAssetUrl(swagger.path, 'swagger-ui.css')}" />
     ${hideUrlCss}
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    <script src="${swaggerAssetUrl(swagger.path, 'swagger-ui-bundle.js')}"></script>
     ${standaloneScript}
     <script>
       window.onload = function() {
@@ -926,6 +1047,7 @@ class FusionApp {
     const swagger = readSwaggerSettings()
     if (swagger.enabled) {
       const prefix = swagger.path
+      mountSwaggerAssets(this.engine, prefix)
       const labels = applyVersionNavbar(swagger)
       const combined = buildOpenApi(swagger)
 
@@ -1012,6 +1134,7 @@ module.exports = {
   Settings: NativeSettings,
   FusionApp,
   FusionBaseApi,
+  FusionBaseTemplate,
   HTTPException,
   router,
   route,
@@ -1040,6 +1163,7 @@ module.exports = {
   coerceParam,
   parsePagination,
   paginatedBody,
+  renderTemplate,
   getHttpMethods: () => HTTP_METHODS,
   apiResourceNameJs: native.apiResourceNameJs,
   resolveRoutePathJs: native.resolveRoutePathJs,

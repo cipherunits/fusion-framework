@@ -147,11 +147,7 @@ mod tests {
         let res = response_from_value(json!({"status": 204}));
         assert_eq!(res.status, 204);
         assert!(res.body.is_empty());
-        assert!(
-            !res.headers
-                .iter()
-                .any(|(k, _)| k == "content-type")
-        );
+        assert!(!res.headers.iter().any(|(k, _)| k == "content-type"));
     }
 
     #[test]

@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use fusion_core::{
-    HttpError, ParamKind, ParamSpec, Request, bind_args, build_response, resolve_handler_route,
-    HTTP_METHODS,
+    HTTP_METHODS, HttpError, ParamKind, ParamSpec, Request, bind_args, build_response,
+    resolve_handler_route,
 };
+use pyo3::PyObject;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyType};
-use pyo3::PyObject;
 use serde_json::Value as JsonValue;
 
 use crate::json::{json_to_py, py_to_json};
@@ -369,12 +369,8 @@ pub fn register_route(
             continue;
         };
         custom_handlers.insert(method_name.clone());
-        let path = resolve_handler_route(
-            &class_base_path,
-            &meta.template,
-            &class_name,
-            &method_name,
-        );
+        let path =
+            resolve_handler_route(&class_base_path, &meta.template, &class_name, &method_name);
         let specs = extract_param_specs(py, &method)?;
         slots.push(RouteMountSlot {
             path,
@@ -452,18 +448,12 @@ fn read_http_route_meta(method: &Bound<'_, PyAny>) -> PyResult<Option<HttpRouteM
         None => false,
     };
     let tags: Vec<String> = if tags_set {
-        tags_item
-            .and_then(|v| v.extract().ok())
-            .unwrap_or_default()
+        tags_item.and_then(|v| v.extract().ok()).unwrap_or_default()
     } else {
         Vec::new()
     };
-    let description = dict
-        .get_item("desc")?
-        .and_then(|v| v.extract().ok());
-    let title = dict
-        .get_item("title")?
-        .and_then(|v| v.extract().ok());
+    let description = dict.get_item("desc")?.and_then(|v| v.extract().ok());
+    let title = dict.get_item("title")?.and_then(|v| v.extract().ok());
     let deprecated = dict
         .get_item("deprecated")?
         .and_then(|v| v.extract().ok())
@@ -494,9 +484,16 @@ fn iter_class_callables(
         if name.starts_with('_') {
             continue;
         }
-        if value.hasattr("__func__")? || inspect.call_method1("isfunction", (value.clone(),))?.is_truthy()? {
+        if value.hasattr("__func__")?
+            || inspect
+                .call_method1("isfunction", (value.clone(),))?
+                .is_truthy()?
+        {
             out.push((name, value.unbind()));
-        } else if inspect.call_method1("ismethod", (value.clone(),))?.is_truthy()? {
+        } else if inspect
+            .call_method1("ismethod", (value.clone(),))?
+            .is_truthy()?
+        {
             out.push((name, value.unbind()));
         }
     }
@@ -571,10 +568,7 @@ struct RouteHandler {
 impl RouteHandler {
     #[pyo3(name = "__call__")]
     fn call(&self, py: Python<'_>, request: Py<PyDict>) -> PyResult<PyObject> {
-        let middleware = PyList::new(
-            py,
-            self.middleware.iter().map(|m| m.bind(py)),
-        )?;
+        let middleware = PyList::new(py, self.middleware.iter().map(|m| m.bind(py)))?;
         let invoker = Py::new(
             py,
             HandlerInvoker {
@@ -854,7 +848,10 @@ fn annotation_kind(py: Python<'_>, annotation: &Bound<'_, PyAny>) -> PyResult<Pa
         }
     }
 
-    let name: Option<String> = annotation.getattr("__name__").ok().and_then(|n| n.extract().ok());
+    let name: Option<String> = annotation
+        .getattr("__name__")
+        .ok()
+        .and_then(|n| n.extract().ok());
     match name.as_deref() {
         Some("int") => Ok(ParamKind::Int),
         Some("float") => Ok(ParamKind::Float),
@@ -874,7 +871,7 @@ pub fn openapi_spec() -> serde_json::Value {
 /// - `Some("default")` / `Some("")` — routes without a version
 /// - `Some("v1")` — only that API version
 pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
-    use serde_json::{json, Map, Value};
+    use serde_json::{Map, Value, json};
     const OPENAPI_VERSION: &str = "3.0.3";
 
     let routes_guard = match REGISTRY.lock() {
@@ -915,8 +912,10 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                         "required": required,
                         "schema": schema_for_param(spec.kind, nullable),
                     }));
-                } else if method_upper == "POST" || method_upper == "PUT" || method_upper == "PATCH" {
-                    body_properties.insert(spec.name.clone(), schema_for_param(spec.kind, nullable));
+                } else if method_upper == "POST" || method_upper == "PUT" || method_upper == "PATCH"
+                {
+                    body_properties
+                        .insert(spec.name.clone(), schema_for_param(spec.kind, nullable));
                     if required {
                         body_required.push(spec.name.clone());
                     }
@@ -990,14 +989,19 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                 }
             } else if let Some(obj) = op.as_object_mut() {
                 if let Some(resp) = obj.get_mut("responses").and_then(|v| v.as_object_mut()) {
-                    resp.insert("200".to_string(), json!({
-                        "description": "OK",
-                        "content": { "application/json": { "schema": { "type": "object" } } }
-                    }));
+                    resp.insert(
+                        "200".to_string(),
+                        json!({
+                            "description": "OK",
+                            "content": { "application/json": { "schema": { "type": "object" } } }
+                        }),
+                    );
                 }
             }
 
-            let methods_obj = paths.entry(resolved_path).or_insert_with(|| Value::Object(Map::new()));
+            let methods_obj = paths
+                .entry(resolved_path)
+                .or_insert_with(|| Value::Object(Map::new()));
             if let Some(obj) = methods_obj.as_object_mut() {
                 obj.insert(method_lower, op);
             }
@@ -1012,7 +1016,12 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
     let tags = if tags_set.is_empty() {
         None
     } else {
-        Some(tags_set.into_iter().map(|t| json!({ "name": t })).collect::<Vec<_>>())
+        Some(
+            tags_set
+                .into_iter()
+                .map(|t| json!({ "name": t }))
+                .collect::<Vec<_>>(),
+        )
     };
 
     let mut spec = json!({

@@ -26,8 +26,31 @@ export class FusionBaseApi {
   readonly params: Record<string, string>
   readonly query: Record<string, string>
   readonly state: Record<string, unknown>
+  wantsJson(): boolean
   response(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
 }
+
+export class FusionBaseTemplate extends FusionBaseApi {
+  static template: string
+  static templateAddress: string
+  static templatesDir: string
+  context(): Record<string, unknown>
+  get(): FusionResponse
+  templateName(): string
+  templatesRoot(): string
+  render(options?: {
+    status?: number
+    headers?: Record<string, string>
+    context?: Record<string, unknown>
+    templateName?: string
+  }): FusionResponse
+}
+
+export function renderTemplate(
+  templateName: string,
+  context?: Record<string, unknown>,
+  templatesRoot?: string | null,
+): string
 
 export class HTTPException extends Error {
   status: number
@@ -91,6 +114,7 @@ export function getHttpMethods(): string[]
 export function apiResourceNameJs(className: string): string
 export function resolveRoutePathJs(template: string, className: string): string
 export function coerceParamJs(raw: string, kind?: string): unknown
+export function prefersJsonJs(accept?: string | null, formatQuery?: string | null): boolean
 
 export const settings: Settings
 export const status: Record<string, number>

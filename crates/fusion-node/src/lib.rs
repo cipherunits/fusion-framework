@@ -3,11 +3,11 @@ mod settings;
 use std::sync::Mutex;
 
 use fusion_core::{
-    App as CoreApp, Handler, HandlerFuture, Request, Response,
-    api_resource_name, attachment, cache_control, coerce_param, content_type, download,
-    fingerprint_headers, inline, location, param_kind_from_name, resolve_route_path,
-    response_from_value, PageConfig, PageParams, paginated_body as core_paginated_body,
-    parse_page_params, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES,
+    App as CoreApp, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, Handler, HandlerFuture,
+    PageConfig, PageParams, Request, Response, api_resource_name, attachment, cache_control,
+    coerce_param, content_type, download, fingerprint_headers, inline, location,
+    paginated_body as core_paginated_body, param_kind_from_name, parse_page_params, prefers_json,
+    render_template, resolve_route_path, response_from_value,
 };
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
@@ -262,7 +262,10 @@ pub fn resolve_route_path_js(template: String, class_name: String) -> String {
 
 #[napi]
 pub fn coerce_param_js(env: Env, raw: String, kind: Option<String>) -> Result<Unknown> {
-    let value = coerce_param(&raw, param_kind_from_name(kind.as_deref().unwrap_or("auto")));
+    let value = coerce_param(
+        &raw,
+        param_kind_from_name(kind.as_deref().unwrap_or("auto")),
+    );
     json_to_js(&env, &value)
 }
 
@@ -345,6 +348,23 @@ pub fn header_download(
 #[napi]
 pub fn get_fingerprint_headers() -> std::collections::HashMap<String, String> {
     btree_to_hashmap(fingerprint_headers())
+}
+
+/// True when the client prefers JSON (`Accept` or `?format=json`).
+#[napi]
+pub fn prefers_json_js(accept: Option<String>, format_query: Option<String>) -> bool {
+    prefers_json(accept.as_deref(), format_query.as_deref())
+}
+
+/// Render a Tera template file relative to `templates_root` (default `"templates"`).
+#[napi]
+pub fn render_template_js(
+    template_name: String,
+    context: JsJson,
+    templates_root: Option<String>,
+) -> Result<String> {
+    let root = std::path::PathBuf::from(templates_root.unwrap_or_else(|| "templates".into()));
+    render_template(&template_name, &context.0, &root).map_err(|e| Error::from_reason(e))
 }
 
 #[napi(object)]

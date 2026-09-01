@@ -1,0 +1,36 @@
+# Release flow: merge `dev` → `main` after bumping versions with scripts/set-version.sh.
+# This workflow publishes PyPI, npm, and NuGet packages when code lands on `main` or on `v*` tags.
+# Tag pushes use the tag for package versions; `main` pushes use manifest versions as-is.
+# CI (lint + tests) runs on `dev` only — see ci.yml.
+
+name: Publish
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pypi:
+    uses: ./.github/workflows/publish-pypi.yml
+    secrets: inherit
+
+  npm:
+    uses: ./.github/workflows/publish-npm.yml
+    secrets: inherit
+
+  nuget:
+    uses: ./.github/workflows/publish-nuget.yml
+    secrets: inherit
+
+  # TODO: enable when crates.io publishing and API token / trusted publishing are configured.
+  crates-io:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "TODO cargo publish workspace crates (fusion-core is not published yet)"

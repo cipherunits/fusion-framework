@@ -3,7 +3,11 @@ use fusion_core::{App, Request, Response, SyncHandler};
 #[tokio::main]
 async fn main() {
     let mut app = App::new();
-    app.route("GET", "/", SyncHandler(|_req: Request| Response::text(200, "ok")));
+    app.route(
+        "GET",
+        "/",
+        SyncHandler(|_req: Request| Response::text(200, "ok")),
+    );
     app.route(
         "GET",
         "/api/[module]/{id}",

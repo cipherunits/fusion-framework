@@ -18,6 +18,7 @@ internal static class SwaggerDocs
         var labels = ApplyVersionNavbar(swagger);
 
         var combined = BuildOpenApi(swagger);
+        MountAssets(app, prefix);
         app.AddRawRoute("GET", $"{prefix}/openapi.json", () => combined);
         app.AddRawRoute("GET", prefix, () => Html(UiHtml(swagger, $"{prefix}/openapi.json")));
         if (prefix != "/")
@@ -110,7 +111,7 @@ internal static class SwaggerDocs
             ["showCommonExtensions"] = false,
             ["syntaxHighlight"] = new JsonObject { ["activated"] = true, ["theme"] = "agate" },
             ["withCredentials"] = false,
-            ["validatorUrl"] = "https://validator.swagger.io/validator",
+            ["validatorUrl"] = null,
         };
         var uiOverlay = AsObject(settings.Get("swagger.ui", new { }));
         if (uiOverlay is not null)
@@ -400,7 +401,7 @@ internal static class SwaggerDocs
 """
             : "";
         var standalone = navbarEnabled
-            ? """<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>"""
+            ? $"""<script src="{AssetUrl(swagger.Path, "swagger-ui-standalone-preset.js")}"></script>"""
             : "";
         var navbarJs = navbarEnabled ? "true" : "false";
 
@@ -411,12 +412,12 @@ internal static class SwaggerDocs
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{title}}</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+    <link rel="stylesheet" href="{{AssetUrl(swagger.Path, "swagger-ui.css")}}" />
     {{hideUrlCss}}
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    <script src="{{AssetUrl(swagger.Path, "swagger-ui-bundle.js")}}"></script>
     {{standalone}}
     <script>
       window.onload = function() {
@@ -440,6 +441,44 @@ internal static class SwaggerDocs
   </body>
 </html>
 """;
+    }
+
+    static readonly (string Name, string ContentType)[] SwaggerAssetFiles =
+    [
+        ("swagger-ui-bundle.js", "application/javascript; charset=utf-8"),
+        ("swagger-ui-standalone-preset.js", "application/javascript; charset=utf-8"),
+        ("swagger-ui.css", "text/css; charset=utf-8"),
+    ];
+
+    static string AssetsDirectory()
+    {
+        var asmDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        if (string.IsNullOrEmpty(asmDir))
+            asmDir = AppContext.BaseDirectory;
+        return Path.Combine(asmDir, "static", "swagger-ui");
+    }
+
+    static string AssetUrl(string prefix, string name) => $"{prefix}/assets/{name}";
+
+    static void MountAssets(FusionApp app, string prefix)
+    {
+        var dir = AssetsDirectory();
+        foreach (var (name, contentType) in SwaggerAssetFiles)
+        {
+            var filePath = Path.Combine(dir, name);
+            if (!File.Exists(filePath))
+                continue;
+            var body = File.ReadAllText(filePath);
+            app.AddRawRoute("GET", $"{prefix}/assets/{name}", () => new Dictionary<string, object?>
+            {
+                ["status"] = 200,
+                ["body"] = body,
+                ["headers"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["content-type"] = contentType,
+                },
+            });
+        }
     }
 
     static bool IsDisabledPath(JsonNode? value)

@@ -14,27 +14,26 @@ mod serialize;
 mod server;
 mod settings;
 mod status;
+mod templates;
 
 pub use api_context::ApiContext;
 pub use coerce::{ParamKind, coerce_param, param_kind_from_name};
-pub use dispatch::{ParamSpec, bind_args, build_response, parse_json_object, BODY_METHODS};
+pub use dispatch::{BODY_METHODS, ParamSpec, bind_args, build_response, parse_json_object};
 pub use error::{Error, Result};
 pub use handler::{Handler, HandlerFuture, SyncHandler};
 pub use headers::{
-    apply_fingerprint_headers, attachment, cache_control, content_disposition_attachment,
-    content_disposition_inline, content_type, content_type_value, download, fingerprint_headers,
-    framework_version, inline, location, FRAMEWORK_ID, FRAMEWORK_POWERED_BY, HTTP_HEADER_CONSTANTS,
-    X_FRAMEWORK, X_FUSION_VERSION, X_POWERED_BY,
+    FRAMEWORK_ID, FRAMEWORK_POWERED_BY, HTTP_HEADER_CONSTANTS, X_FRAMEWORK, X_FUSION_VERSION,
+    X_POWERED_BY, apply_fingerprint_headers, attachment, cache_control,
+    content_disposition_attachment, content_disposition_inline, content_type, content_type_value,
+    download, fingerprint_headers, framework_version, inline, location, prefers_json,
 };
 pub use http_error::HttpError;
 pub use naming::{
     HTTP_METHODS, api_action_name, api_resource_name, join_route_paths, resolve_handler_route,
     resolve_method_route_path, resolve_route_path,
 };
-pub use pagination::{
-    PageConfig, PageParams, paginate_slice, paginated_body, parse_page_params,
-};
-pub use request::{parse_query, Request};
+pub use pagination::{PageConfig, PageParams, paginate_slice, paginated_body, parse_page_params};
+pub use request::{Request, parse_query};
 pub use response::Response;
 pub use router::Router;
 pub use serialize::{is_response_envelope, response_from_value};
@@ -42,6 +41,7 @@ pub use settings::Settings;
 pub use status::{
     HTTP_STATUS_CODES, is_client_error, is_informational, is_redirect, is_server_error, is_success,
 };
+pub use templates::{builtin_components, clear_template_cache, render_template};
 
 use std::net::SocketAddr;
 
