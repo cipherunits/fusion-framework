@@ -24,8 +24,8 @@ pub use handler::{Handler, HandlerFuture, SyncHandler};
 pub use headers::{
     apply_fingerprint_headers, attachment, cache_control, content_disposition_attachment,
     content_disposition_inline, content_type, content_type_value, download, fingerprint_headers,
-    framework_version, inline, location, FRAMEWORK_ID, FRAMEWORK_POWERED_BY, HTTP_HEADER_CONSTANTS,
-    X_FRAMEWORK, X_FUSION_VERSION, X_POWERED_BY,
+    framework_version, inline, location, prefers_json, FRAMEWORK_ID, FRAMEWORK_POWERED_BY,
+    HTTP_HEADER_CONSTANTS, X_FRAMEWORK, X_FUSION_VERSION, X_POWERED_BY,
 };
 pub use http_error::HttpError;
 pub use naming::{

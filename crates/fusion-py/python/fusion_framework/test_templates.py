@@ -47,3 +47,69 @@ def test_template_name_required():
 
     with pytest.raises(ValueError, match="template"):
         Bad({}).template_name()
+
+
+def test_template_get_returns_json_with_accept():
+    class Page(FusionBaseTemplate):
+        template = "hello.html"
+
+        def context(self):
+            return {"name": "Fusion"}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "hello.html").write_text("<p>Hello {{ name }}!</p>", encoding="utf-8")
+
+        page = Page(
+            {
+                "method": "GET",
+                "path": "/pages/home",
+                "headers": {"accept": "application/json"},
+            }
+        )
+        page.templates_dir = str(root)
+        assert page.get() == {"name": "Fusion"}
+
+
+def test_template_get_returns_json_with_format_query():
+    class Page(FusionBaseTemplate):
+        template = "hello.html"
+
+        def context(self):
+            return {"name": "Fusion"}
+
+    page = Page(
+        {
+            "method": "GET",
+            "path": "/pages/home",
+            "query": {"format": "json"},
+        }
+    )
+    assert page.get() == {"name": "Fusion"}
+
+
+def test_template_get_returns_html_for_browser_accept():
+    class Page(FusionBaseTemplate):
+        template = "hello.html"
+
+        def context(self):
+            return {"name": "Fusion"}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "hello.html").write_text("<p>Hello {{ name }}!</p>", encoding="utf-8")
+
+        page = Page(
+            {
+                "method": "GET",
+                "path": "/pages/home",
+                "headers": {
+                    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9"
+                },
+            }
+        )
+        page.templates_dir = str(root)
+        out = page.get()
+        assert out["status"] == 200
+        assert out["headers"]["content-type"].startswith("text/html")
+        assert "Hello Fusion!" in out["body"]

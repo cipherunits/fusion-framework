@@ -25,8 +25,9 @@ class FusionBaseTemplate(FusionBaseApi):
     """Class-based HTML handler using Tera templates.
 
     Set ``template`` (or ``template_address``) to the file path under the templates
-    directory. Override ``context()`` to pass variables. Call ``render()`` from
-    a route handler, or rely on the default ``get()`` implementation.
+    directory. Override ``context()`` to pass variables. The default ``get()`` renders
+    HTML for browsers and returns ``context()`` as JSON when the client sends
+    ``Accept: application/json`` or ``?format=json``.
 
     Built-in UI components are defined in ``fusion/macros.html`` (Tera 2 components)::
 
@@ -42,7 +43,9 @@ class FusionBaseTemplate(FusionBaseApi):
         return {}
 
     def get(self) -> dict[str, Any]:
-        """Default GET handler — renders the configured template."""
+        """Default GET — HTML page, or ``context()`` JSON when client wants JSON."""
+        if self.wants_json():
+            return self.context()
         return self.render()
 
     def template_name(self) -> str:

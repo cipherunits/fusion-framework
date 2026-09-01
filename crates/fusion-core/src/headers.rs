@@ -331,6 +331,43 @@ pub fn download(filename: &str, media_type: Option<&str>) -> BTreeMap<String, St
     map
 }
 
+/// True when the client prefers a JSON representation.
+///
+/// Honors ``?format=json`` and ``Accept`` quality values (``application/json`` vs
+/// ``text/html``). Browsers that send both types with HTML preferred still get HTML.
+pub fn prefers_json(accept: Option<&str>, format_query: Option<&str>) -> bool {
+    if matches!(format_query, Some(f) if f.eq_ignore_ascii_case("json")) {
+        return true;
+    }
+    let accept = accept.unwrap_or("").trim();
+    if accept.is_empty() {
+        return false;
+    }
+
+    let mut best_json = -1.0f32;
+    let mut best_html = -1.0f32;
+
+    for part in accept.split(',') {
+        let mut tokens = part.trim().split(';').map(str::trim);
+        let media = tokens.next().unwrap_or("").to_ascii_lowercase();
+        let mut q = 1.0f32;
+        for token in tokens {
+            if let Some(val) = token.strip_prefix("q=") {
+                if let Ok(parsed) = val.parse::<f32>() {
+                    q = parsed;
+                }
+            }
+        }
+        match media.as_str() {
+            "application/json" | "text/json" => best_json = best_json.max(q),
+            "text/html" | "application/xhtml+xml" => best_html = best_html.max(q),
+            _ => {}
+        }
+    }
+
+    best_json > 0.0 && best_json >= best_html
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -355,5 +392,24 @@ mod tests {
         let h = download("a.csv", Some(TEXT_CSV));
         assert_eq!(h.get(CONTENT_TYPE).map(String::as_str), Some(TEXT_CSV));
         assert!(h.get(CONTENT_DISPOSITION).unwrap().contains("attachment"));
+    }
+
+    #[test]
+    fn prefers_json_from_query() {
+        assert!(prefers_json(None, Some("json")));
+        assert!(!prefers_json(None, Some("html")));
+    }
+
+    #[test]
+    fn prefers_json_from_accept() {
+        assert!(prefers_json(Some("application/json"), None));
+        assert!(!prefers_json(
+            Some("text/html,application/xhtml+xml,application/xml;q=0.9"),
+            None
+        ));
+        assert!(prefers_json(
+            Some("text/html;q=0.5,application/json;q=0.9"),
+            None
+        ));
     }
 }

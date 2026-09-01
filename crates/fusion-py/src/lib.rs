@@ -501,6 +501,12 @@ fn py_render_template(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))
 }
 
+#[pyfunction(name = "prefers_json")]
+#[pyo3(signature = (accept=None, format_query=None))]
+fn py_prefers_json(accept: Option<&str>, format_query: Option<&str>) -> bool {
+    fusion_core::prefers_json(accept, format_query)
+}
+
 #[pymodule]
 fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
@@ -510,6 +516,7 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_resolve_route_path, m)?)?;
     m.add_function(wrap_pyfunction!(py_coerce_param, m)?)?;
     m.add_function(wrap_pyfunction!(py_render_template, m)?)?;
+    m.add_function(wrap_pyfunction!(py_prefers_json, m)?)?;
     m.add_function(wrap_pyfunction!(py_register_route, m)?)?;
     m.add_function(wrap_pyfunction!(clear_routes, m)?)?;
     m.add_function(wrap_pyfunction!(http_error_to_response, m)?)?;

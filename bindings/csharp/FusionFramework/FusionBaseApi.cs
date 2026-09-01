@@ -27,6 +27,22 @@ public abstract class FusionBaseApi
     public IReadOnlyDictionary<string, string> Query => Request.Query;
     public IDictionary<string, JsonNode?> State => Request.State;
 
+    /// <summary>True when the client prefers JSON (Accept header or ?format=json).</summary>
+    public bool WantsJson()
+    {
+        string? accept = null;
+        foreach (var kv in Request.Headers)
+        {
+            if (string.Equals(kv.Key, "Accept", StringComparison.OrdinalIgnoreCase))
+            {
+                accept = kv.Value;
+                break;
+            }
+        }
+        Request.Query.TryGetValue("format", out var format);
+        return ContentNegotiation.PrefersJson(accept, format);
+    }
+
     public object Response(object? body = null, int status = 200, IDictionary<string, string>? headers = null)
     {
         var envelope = new Dictionary<string, object?>

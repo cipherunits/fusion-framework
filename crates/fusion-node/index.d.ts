@@ -26,6 +26,7 @@ export class FusionBaseApi {
   readonly params: Record<string, string>
   readonly query: Record<string, string>
   readonly state: Record<string, unknown>
+  wantsJson(): boolean
   response(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
 }
 
@@ -113,6 +114,7 @@ export function getHttpMethods(): string[]
 export function apiResourceNameJs(className: string): string
 export function resolveRoutePathJs(template: string, className: string): string
 export function coerceParamJs(raw: string, kind?: string): unknown
+export function prefersJsonJs(accept?: string | null, formatQuery?: string | null): boolean
 
 export const settings: Settings
 export const status: Record<string, number>

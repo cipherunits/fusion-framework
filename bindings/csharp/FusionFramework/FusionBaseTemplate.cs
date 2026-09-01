@@ -12,7 +12,12 @@ public abstract class FusionBaseTemplate : FusionBaseApi
 
     public virtual Dictionary<string, JsonNode?> Context() => new();
 
-    public virtual object Get() => Render();
+    public virtual object Get()
+    {
+        if (WantsJson())
+            return Context();
+        return Render();
+    }
 
     public virtual string TemplateName()
     {

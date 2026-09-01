@@ -228,6 +228,42 @@ class FusionBaseApi {
     const body = paginatedBody(items, total, p)
     return this.response(body, status, headers || {})
   }
+
+  wantsJson() {
+    let accept = null
+    for (const [key, value] of Object.entries(this.headers || {})) {
+      if (key.toLowerCase() === 'accept') {
+        accept = String(value)
+        break
+      }
+    }
+    const format = this.query?.format != null ? String(this.query.format) : null
+    return typeof native.prefersJsonJs === 'function'
+      ? native.prefersJsonJs(accept, format)
+      : prefersJsonFallback(accept, format)
+  }
+}
+
+function prefersJsonFallback(accept, formatQuery) {
+  if (formatQuery && String(formatQuery).toLowerCase() === 'json') return true
+  const value = String(accept || '').trim().toLowerCase()
+  if (!value) return false
+  let bestJson = -1
+  let bestHtml = -1
+  for (const part of value.split(',')) {
+    const tokens = part.trim().split(';').map((t) => t.trim())
+    const media = tokens[0] || ''
+    let q = 1
+    for (const token of tokens.slice(1)) {
+      if (token.startsWith('q=')) {
+        const parsed = Number.parseFloat(token.slice(2))
+        if (!Number.isNaN(parsed)) q = parsed
+      }
+    }
+    if (media === 'application/json' || media === 'text/json') bestJson = Math.max(bestJson, q)
+    else if (media === 'text/html' || media === 'application/xhtml+xml') bestHtml = Math.max(bestHtml, q)
+  }
+  return bestJson > 0 && bestJson >= bestHtml
 }
 
 class FusionBaseTemplate extends FusionBaseApi {
@@ -240,6 +276,7 @@ class FusionBaseTemplate extends FusionBaseApi {
   }
 
   get() {
+    if (this.wantsJson()) return this.context()
     return this.render()
   }
 
