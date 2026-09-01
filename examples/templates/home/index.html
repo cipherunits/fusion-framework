@@ -1,0 +1,11 @@
+{% extends "fusion/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+  {{<fusion.alert message={message} variant="success" />}}
+  <h1>{{ title }}</h1>
+  <p>{{ message }}</p>
+  {{<fusion.button label="API docs" href="/swagger" variant="primary" />}}
+  {{<fusion.card title="Built-in components" content="<p>Use <code>fusion/macros.html</code> components in your templates.</p>" />}}
+{% endblock %}

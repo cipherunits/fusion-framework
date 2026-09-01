@@ -12,8 +12,8 @@ use std::ptr;
 
 use fusion_core::{
     api_resource_name, resolve_route_path, response_from_value, App, Handler, Request, Response,
-    Settings, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, attachment, cache_control,
-    content_type, download, inline, location,
+    render_template, Settings, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, attachment,
+    cache_control, content_type, download, inline, location,
 };
 use serde_json::{Map, Value};
 
@@ -528,4 +528,37 @@ pub extern "C" fn fusion_header_download(
 #[unsafe(no_mangle)]
 pub extern "C" fn fusion_fingerprint_headers() -> *mut c_char {
     headers_map_json(&fusion_core::fingerprint_headers())
+}
+
+/// Render a Tera template. `context_json` is a JSON object; `templates_root` may be empty for default `templates`.
+/// Returns HTML or null on error (check with fusion_last_error). Free with fusion_string_free.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_render_template(
+    template_name: *const c_char,
+    context_json: *const c_char,
+    templates_root: *const c_char,
+) -> *mut c_char {
+    let name = cstr_to_str(template_name);
+    if name.is_empty() {
+        return ptr::null_mut();
+    }
+    let ctx_raw = cstr_to_str(context_json);
+    let context = if ctx_raw.is_empty() {
+        Value::Object(Map::new())
+    } else {
+        serde_json::from_str(ctx_raw).unwrap_or(Value::Object(Map::new()))
+    };
+    let root_raw = cstr_to_str(templates_root);
+    let root = if root_raw.is_empty() {
+        PathBuf::from("templates")
+    } else {
+        PathBuf::from(root_raw)
+    };
+    match render_template(name, &context, &root) {
+        Ok(html) => to_cstring(&html),
+        Err(e) => {
+            eprintln!("fusion_render_template: {e}");
+            ptr::null_mut()
+        }
+    }
 }

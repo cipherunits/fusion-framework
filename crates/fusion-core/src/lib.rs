@@ -13,6 +13,7 @@ mod router;
 mod serialize;
 mod server;
 mod settings;
+mod templates;
 mod status;
 
 pub use api_context::ApiContext;
@@ -42,6 +43,7 @@ pub use settings::Settings;
 pub use status::{
     HTTP_STATUS_CODES, is_client_error, is_informational, is_redirect, is_server_error, is_success,
 };
+pub use templates::{builtin_components, clear_template_cache, render_template};
 
 use std::net::SocketAddr;
 

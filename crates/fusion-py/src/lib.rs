@@ -5,8 +5,8 @@ use bytes::Bytes;
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response, Settings as CoreSettings,
     api_resource_name, attachment, cache_control, coerce_param, content_type, download, inline,
-    location, param_kind_from_name, response_from_value, HTTP_HEADER_CONSTANTS, HTTP_METHODS,
-    HTTP_STATUS_CODES,
+    location, param_kind_from_name, render_template, response_from_value, HTTP_HEADER_CONSTANTS,
+    HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
@@ -482,6 +482,25 @@ fn py_coerce_param(py: Python<'_>, raw: &str, kind: &str) -> PyResult<PyObject> 
     json_to_py(py, &value)
 }
 
+#[pyfunction(name = "render_template")]
+#[pyo3(signature = (template_name, context=None, templates_root=None))]
+fn py_render_template(
+    py: Python<'_>,
+    template_name: &str,
+    context: Option<Bound<'_, PyDict>>,
+    templates_root: Option<&str>,
+) -> PyResult<String> {
+    use std::path::PathBuf;
+
+    let ctx = match context {
+        Some(d) => py_to_json(py, d.as_any())?,
+        None => serde_json::Value::Object(serde_json::Map::new()),
+    };
+    let root = PathBuf::from(templates_root.unwrap_or("templates"));
+    render_template(template_name, &ctx, &root)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))
+}
+
 #[pymodule]
 fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyApp>()?;
@@ -490,6 +509,7 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_api_resource_name, m)?)?;
     m.add_function(wrap_pyfunction!(py_resolve_route_path, m)?)?;
     m.add_function(wrap_pyfunction!(py_coerce_param, m)?)?;
+    m.add_function(wrap_pyfunction!(py_render_template, m)?)?;
     m.add_function(wrap_pyfunction!(py_register_route, m)?)?;
     m.add_function(wrap_pyfunction!(clear_routes, m)?)?;
     m.add_function(wrap_pyfunction!(http_error_to_response, m)?)?;

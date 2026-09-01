@@ -19,4 +19,5 @@ hyper-util = { workspace = true }
 bytes = { workspace = true }
 http = { workspace = true }
 serde_json = { workspace = true }
+tera = {version = "2", features = ["fast"]}
 console = "0.16.4"

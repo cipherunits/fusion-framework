@@ -5,9 +5,10 @@ use std::sync::Mutex;
 use fusion_core::{
     App as CoreApp, Handler, HandlerFuture, Request, Response,
     api_resource_name, attachment, cache_control, coerce_param, content_type, download,
-    fingerprint_headers, inline, location, param_kind_from_name, resolve_route_path,
-    response_from_value, PageConfig, PageParams, paginated_body as core_paginated_body,
-    parse_page_params, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES,
+    fingerprint_headers, inline, location, param_kind_from_name, render_template,
+    resolve_route_path, response_from_value, PageConfig, PageParams,
+    paginated_body as core_paginated_body, parse_page_params, HTTP_HEADER_CONSTANTS,
+    HTTP_METHODS, HTTP_STATUS_CODES,
 };
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
@@ -345,6 +346,17 @@ pub fn header_download(
 #[napi]
 pub fn get_fingerprint_headers() -> std::collections::HashMap<String, String> {
     btree_to_hashmap(fingerprint_headers())
+}
+
+/// Render a Tera template file relative to `templates_root` (default `"templates"`).
+#[napi]
+pub fn render_template_js(
+    template_name: String,
+    context: JsJson,
+    templates_root: Option<String>,
+) -> Result<String> {
+    let root = std::path::PathBuf::from(templates_root.unwrap_or_else(|| "templates".into()));
+    render_template(&template_name, &context.0, &root).map_err(|e| Error::from_reason(e))
 }
 
 #[napi(object)]

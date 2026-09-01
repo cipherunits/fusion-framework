@@ -93,6 +93,13 @@ impl Settings {
         self.get_bool("debug").unwrap_or(false)
     }
 
+    /// Directory for Tera templates (``templates.dir`` in settings).
+    pub fn templates_dir(&self) -> String {
+        self.get_str("templates.dir")
+            .or_else(|| self.get_str("templates_dir"))
+            .unwrap_or_else(|| "templates".into())
+    }
+
     /// Load ``fusion.<env>.json`` (auto-discover) or an explicit path.
     ///
     /// `extra_roots` are searched after the process cwd (e.g. `__main__` dir).

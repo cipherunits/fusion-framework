@@ -230,6 +230,56 @@ class FusionBaseApi {
   }
 }
 
+class FusionBaseTemplate extends FusionBaseApi {
+  static template = ''
+  static templateAddress = ''
+  static templatesDir = ''
+
+  context() {
+    return {}
+  }
+
+  get() {
+    return this.render()
+  }
+
+  templateName() {
+    const name = this.constructor.template || this.constructor.templateAddress
+    if (!name) {
+      throw new Error(`${this.constructor.name} must set static template or templateAddress`)
+    }
+    return name
+  }
+
+  templatesRoot() {
+    if (this.constructor.templatesDir) return this.constructor.templatesDir
+    return String(settings.get('templates.dir', 'templates'))
+  }
+
+  render({
+    status = 200,
+    headers = {},
+    context = null,
+    templateName = null,
+  } = {}) {
+    const ctx = { ...this.context(), ...(context || {}) }
+    const html = renderTemplate(
+      templateName || this.templateName(),
+      ctx,
+      this.templatesRoot(),
+    )
+    return this.response(html, status, {
+      'content-type': 'text/html; charset=utf-8',
+      ...headers,
+    })
+  }
+}
+
+function renderTemplate(templateName, context = {}, templatesRoot = null) {
+  const root = templatesRoot ?? String(settings.get('templates.dir', 'templates'))
+  return native.renderTemplateJs(templateName, context || {}, root)
+}
+
 function apiResourceName(cls) {
   const name = typeof cls === 'string' ? cls : cls.name
   return native.apiResourceNameJs(name)
@@ -1047,6 +1097,7 @@ module.exports = {
   Settings: NativeSettings,
   FusionApp,
   FusionBaseApi,
+  FusionBaseTemplate,
   HTTPException,
   router,
   route,
@@ -1075,6 +1126,7 @@ module.exports = {
   coerceParam,
   parsePagination,
   paginatedBody,
+  renderTemplate,
   getHttpMethods: () => HTTP_METHODS,
   apiResourceNameJs: native.apiResourceNameJs,
   resolveRoutePathJs: native.resolveRoutePathJs,

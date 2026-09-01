@@ -29,6 +29,28 @@ export class FusionBaseApi {
   response(body?: unknown, status?: number, headers?: Record<string, string>): FusionResponse
 }
 
+export class FusionBaseTemplate extends FusionBaseApi {
+  static template: string
+  static templateAddress: string
+  static templatesDir: string
+  context(): Record<string, unknown>
+  get(): FusionResponse
+  templateName(): string
+  templatesRoot(): string
+  render(options?: {
+    status?: number
+    headers?: Record<string, string>
+    context?: Record<string, unknown>
+    templateName?: string
+  }): FusionResponse
+}
+
+export function renderTemplate(
+  templateName: string,
+  context?: Record<string, unknown>,
+  templatesRoot?: string | null,
+): string
+
 export class HTTPException extends Error {
   status: number
   detail: unknown
