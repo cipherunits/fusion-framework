@@ -16,6 +16,8 @@ From this repo:
 cd crates/fusion-node && npm install && npm run build:debug
 ```
 
+**Important:** `napi build` must use `--js false` so it does not overwrite `index.js` (the FusionApp / middleware layer). The npm scripts already pass this flag.
+
 Scaffold with [Fusion Tool](https://github.com/cipherunits/fusion-tool):
 
 ```bash
