@@ -2,7 +2,14 @@
 
 from fusion_framework._fusion import has_unversioned_routes, openapi_spec, route_versions
 from fusion_framework.api import FusionBaseApi
-from fusion_framework.app import UNVERSIONED_SWAGGER_NAME, _swagger_version_urls
+from fusion_framework.app import (
+    UNVERSIONED_SWAGGER_NAME,
+    _apply_version_navbar,
+    _swagger_settings,
+    _swagger_ui_html,
+    _swagger_version_urls,
+)
+from fusion_framework.config import Settings
 from fusion_framework.route import clear_registry, route
 
 
@@ -83,3 +90,28 @@ def test_navbar_urls_list_each_version():
         {"url": "/swagger/v2/openapi.json", "name": "v2"},
         {"url": "/swagger/default/openapi.json", "name": "default"},
     ]
+
+
+def test_swagger_ui_html_version_navbar():
+    @route("/hello", version="v1")
+    class V1Hello(FusionBaseApi):
+        def get(self):
+            return {"v": 1}
+
+    @route("/hello", version="v2")
+    class V2Hello(FusionBaseApi):
+        def get(self):
+            return {"v": 2}
+
+    swagger = _swagger_settings(Settings())
+    labels = _apply_version_navbar(swagger)
+    assert labels == ["v1", "v2"]
+
+    html = _swagger_ui_html(swagger, "/swagger/openapi.json", primary_name="v1")
+    assert "/swagger/v1/openapi.json" in html
+    assert "/swagger/v2/openapi.json" in html
+    assert '"urls"' in html
+    assert "StandaloneLayout" in html
+    assert "swagger-ui-standalone-preset.js" in html
+    assert ".download-url-wrapper input[type=text]" in html
+    assert ".download-url-input" not in html

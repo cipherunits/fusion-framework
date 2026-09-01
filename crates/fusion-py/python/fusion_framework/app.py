@@ -257,17 +257,21 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str, primary_name: st
 
     navbar_enabled = bool(navbar.get("enabled"))
     show_url_input = bool(navbar.get("showUrlInput", True))
+    version_urls = navbar.get("urls") or []
+    needs_standalone = navbar_enabled or bool(version_urls)
     hide_url_css = ""
     if navbar_enabled and not show_url_input:
         # Keep the version <select>; hide only the free-text Explore box + button.
         hide_url_css = """
     <style>
-      .swagger-ui .topbar .download-url-input,
-      .swagger-ui .topbar .download-url-button { display: none !important; }
+      .swagger-ui .topbar .download-url-wrapper input[type=text],
+      .swagger-ui .topbar .download-url-wrapper .download-url-button {
+        display: none !important;
+      }
     </style>"""
 
     standalone_script = ""
-    if navbar_enabled:
+    if needs_standalone and "swagger-ui-standalone-preset.js" in _SWAGGER_ASSETS:
         standalone_script = (
             f'<script src="{_swagger_asset_url(prefix, "swagger-ui-standalone-preset.js")}"></script>'
         )
@@ -277,7 +281,7 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str, primary_name: st
         var opts = {ui_json};
         opts.presets = [SwaggerUIBundle.presets.apis];
         opts.plugins = [SwaggerUIBundle.plugins.DownloadUrl];
-        if ({str(navbar_enabled).lower()} && typeof SwaggerUIStandalonePreset !== 'undefined') {{
+        if ({str(needs_standalone).lower()} && typeof SwaggerUIStandalonePreset !== 'undefined') {{
           opts.presets.push(SwaggerUIStandalonePreset);
           opts.layout = 'StandaloneLayout';
         }} else {{

@@ -392,18 +392,22 @@ internal static class SwaggerDocs
             : "null";
         var title = JsonSerializer.Serialize(swagger.PageTitle).Trim('"');
         var navbarEnabled = swagger.NavbarEnabled;
+        var versionUrls = swagger.Urls?.Count > 0;
+        var needsStandalone = navbarEnabled || versionUrls;
         var hideUrlCss = navbarEnabled && !swagger.ShowUrlInput
             ? """
     <style>
-      .swagger-ui .topbar .download-url-input,
-      .swagger-ui .topbar .download-url-button { display: none !important; }
+      .swagger-ui .topbar .download-url-wrapper input[type=text],
+      .swagger-ui .topbar .download-url-wrapper .download-url-button {
+        display: none !important;
+      }
     </style>
 """
             : "";
-        var standalone = navbarEnabled
+        var standalone = needsStandalone && File.Exists(Path.Combine(AssetsDirectory(), "swagger-ui-standalone-preset.js"))
             ? $"""<script src="{AssetUrl(swagger.Path, "swagger-ui-standalone-preset.js")}"></script>"""
             : "";
-        var navbarJs = navbarEnabled ? "true" : "false";
+        var navbarJs = needsStandalone ? "true" : "false";
 
         return $$"""
 <!doctype html>
