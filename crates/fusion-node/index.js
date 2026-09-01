@@ -956,6 +956,8 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
 
   const navbarEnabled = !!swagger.navbar?.enabled
   const showUrlInput = swagger.navbar?.showUrlInput !== false
+  const versionUrls = swagger.navbar?.urls?.length > 0
+  const needsStandalone = navbarEnabled || versionUrls
   const hideUrlCss =
     navbarEnabled && !showUrlInput
       ? `<style>
@@ -965,9 +967,10 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
       }
     </style>`
       : ''
-  const standaloneScript = navbarEnabled
-    ? `<script src="${swaggerAssetUrl(swagger.path, 'swagger-ui-standalone-preset.js')}"></script>`
-    : ''
+  const standaloneScript =
+    needsStandalone && SWAGGER_ASSETS['swagger-ui-standalone-preset.js']
+      ? `<script src="${swaggerAssetUrl(swagger.path, 'swagger-ui-standalone-preset.js')}"></script>`
+      : ''
 
   return `<!doctype html>
 <html>
@@ -987,7 +990,7 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
         var opts = ${uiJson};
         opts.presets = [SwaggerUIBundle.presets.apis];
         opts.plugins = [SwaggerUIBundle.plugins.DownloadUrl];
-        if (${navbarEnabled ? 'true' : 'false'} && typeof SwaggerUIStandalonePreset !== 'undefined') {
+        if (${needsStandalone ? 'true' : 'false'} && typeof SwaggerUIStandalonePreset !== 'undefined') {
           opts.presets.push(SwaggerUIStandalonePreset);
           opts.layout = 'StandaloneLayout';
         } else {
