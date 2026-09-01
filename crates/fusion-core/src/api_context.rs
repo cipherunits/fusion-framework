@@ -32,11 +32,7 @@ impl ApiContext {
         }
     }
 
-    pub fn response(
-        body: Value,
-        status: u16,
-        headers: HashMap<String, String>,
-    ) -> Value {
+    pub fn response(body: Value, status: u16, headers: HashMap<String, String>) -> Value {
         build_response(body, status, headers)
     }
 }

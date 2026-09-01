@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use fusion_core::{
-    PageConfig, PageParams, paginated_body, parse_page_params, HttpError,
-};
+use fusion_core::{HttpError, PageConfig, PageParams, paginated_body, parse_page_params};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 

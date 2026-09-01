@@ -24,8 +24,8 @@ pub fn render_template(
     templates_root: &Path,
 ) -> Result<String, String> {
     let tera = engine_for_root(templates_root)?;
-    let ctx = Context::from_serialize(context)
-        .map_err(|e| format!("invalid template context: {e}"))?;
+    let ctx =
+        Context::from_serialize(context).map_err(|e| format!("invalid template context: {e}"))?;
     tera.render(template_name, &ctx)
         .map_err(|e| format!("template render failed: {e}"))
 }
@@ -47,30 +47,24 @@ fn engine_for_root(root: &Path) -> Result<Tera, String> {
     }
 
     let tera = build_engine(root)?;
-    *guard = Some(EngineCache { key, tera: tera.clone() });
+    *guard = Some(EngineCache {
+        key,
+        tera: tera.clone(),
+    });
     Ok(tera)
 }
 
 fn build_engine(root: &Path) -> Result<Tera, String> {
     let mut raw: Vec<(String, String)> = vec![
-        (
-            "fusion/macros.html".to_string(),
-            BUILTIN_MACROS.to_string(),
-        ),
-        (
-            "fusion/base.html".to_string(),
-            BUILTIN_BASE.to_string(),
-        ),
+        ("fusion/macros.html".to_string(), BUILTIN_MACROS.to_string()),
+        ("fusion/base.html".to_string(), BUILTIN_BASE.to_string()),
     ];
 
     if root.is_dir() {
         collect_templates(root, root, &mut raw)?;
     }
 
-    let pairs: Vec<(&str, &str)> = raw
-        .iter()
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-        .collect();
+    let pairs: Vec<(&str, &str)> = raw.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
 
     let mut tera = Tera::default();
     tera.add_raw_templates(pairs)
@@ -90,10 +84,7 @@ fn collect_templates(
             collect_templates(root, &path, out)?;
             continue;
         }
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("");
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         if ext != "html" && ext != "tera" {
             continue;
         }
@@ -118,11 +109,20 @@ pub fn clear_template_cache() {
 /// List built-in component names exposed to templates.
 pub fn builtin_components() -> HashMap<&'static str, &'static str> {
     HashMap::from([
-        ("button", "{{<fusion.button label=\"...\" href=\"...\" variant=\"primary\" />}}"),
+        (
+            "button",
+            "{{<fusion.button label=\"...\" href=\"...\" variant=\"primary\" />}}",
+        ),
         ("link", "{{<fusion.link label=\"...\" href=\"...\" />}}"),
         ("card", "{{<fusion.card title=\"...\" content=\"...\" />}}"),
-        ("alert", "{{<fusion.alert message={msg} variant=\"info\" />}}"),
-        ("badge", "{{<fusion.badge label=\"...\" variant=\"default\" />}}"),
+        (
+            "alert",
+            "{{<fusion.alert message={msg} variant=\"info\" />}}",
+        ),
+        (
+            "badge",
+            "{{<fusion.badge label=\"...\" variant=\"default\" />}}",
+        ),
     ])
 }
 

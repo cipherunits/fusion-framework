@@ -3,12 +3,11 @@ mod settings;
 use std::sync::Mutex;
 
 use fusion_core::{
-    App as CoreApp, Handler, HandlerFuture, Request, Response,
-    api_resource_name, attachment, cache_control, coerce_param, content_type, download,
-    fingerprint_headers, inline, location, param_kind_from_name, prefers_json, render_template,
-    resolve_route_path, response_from_value, PageConfig, PageParams,
-    paginated_body as core_paginated_body, parse_page_params, HTTP_HEADER_CONSTANTS,
-    HTTP_METHODS, HTTP_STATUS_CODES,
+    App as CoreApp, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, Handler, HandlerFuture,
+    PageConfig, PageParams, Request, Response, api_resource_name, attachment, cache_control,
+    coerce_param, content_type, download, fingerprint_headers, inline, location,
+    paginated_body as core_paginated_body, param_kind_from_name, parse_page_params, prefers_json,
+    render_template, resolve_route_path, response_from_value,
 };
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
@@ -263,7 +262,10 @@ pub fn resolve_route_path_js(template: String, class_name: String) -> String {
 
 #[napi]
 pub fn coerce_param_js(env: Env, raw: String, kind: Option<String>) -> Result<Unknown> {
-    let value = coerce_param(&raw, param_kind_from_name(kind.as_deref().unwrap_or("auto")));
+    let value = coerce_param(
+        &raw,
+        param_kind_from_name(kind.as_deref().unwrap_or("auto")),
+    );
     json_to_js(&env, &value)
 }
 

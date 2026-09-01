@@ -92,9 +92,7 @@ pub fn fingerprint_header_pairs() -> [(&'static str, String); 3] {
 /// Insert fingerprint headers if the response does not already set them.
 pub fn apply_fingerprint_headers(headers: &mut Vec<(String, String)>) {
     for (name, value) in fingerprint_header_pairs() {
-        let exists = headers
-            .iter()
-            .any(|(n, _)| n.eq_ignore_ascii_case(name));
+        let exists = headers.iter().any(|(n, _)| n.eq_ignore_ascii_case(name));
         if !exists {
             headers.push((name.to_string(), value));
         }
@@ -184,11 +182,23 @@ pub const HTTP_HEADER_CONSTANTS: &[(&str, &str)] = &[
     ("ACCESS_CONTROL_ALLOW_ORIGIN", ACCESS_CONTROL_ALLOW_ORIGIN),
     ("ACCESS_CONTROL_ALLOW_METHODS", ACCESS_CONTROL_ALLOW_METHODS),
     ("ACCESS_CONTROL_ALLOW_HEADERS", ACCESS_CONTROL_ALLOW_HEADERS),
-    ("ACCESS_CONTROL_ALLOW_CREDENTIALS", ACCESS_CONTROL_ALLOW_CREDENTIALS),
-    ("ACCESS_CONTROL_EXPOSE_HEADERS", ACCESS_CONTROL_EXPOSE_HEADERS),
+    (
+        "ACCESS_CONTROL_ALLOW_CREDENTIALS",
+        ACCESS_CONTROL_ALLOW_CREDENTIALS,
+    ),
+    (
+        "ACCESS_CONTROL_EXPOSE_HEADERS",
+        ACCESS_CONTROL_EXPOSE_HEADERS,
+    ),
     ("ACCESS_CONTROL_MAX_AGE", ACCESS_CONTROL_MAX_AGE),
-    ("ACCESS_CONTROL_REQUEST_METHOD", ACCESS_CONTROL_REQUEST_METHOD),
-    ("ACCESS_CONTROL_REQUEST_HEADERS", ACCESS_CONTROL_REQUEST_HEADERS),
+    (
+        "ACCESS_CONTROL_REQUEST_METHOD",
+        ACCESS_CONTROL_REQUEST_METHOD,
+    ),
+    (
+        "ACCESS_CONTROL_REQUEST_HEADERS",
+        ACCESS_CONTROL_REQUEST_HEADERS,
+    ),
     ("X_POWERED_BY", X_POWERED_BY),
     ("X_FRAMEWORK", X_FRAMEWORK),
     ("X_FUSION_VERSION", X_FUSION_VERSION),
@@ -300,7 +310,10 @@ pub fn headers_map(pairs: &[(&str, String)]) -> BTreeMap<String, String> {
 
 /// `{ Content-Disposition: attachment; filename="..." }`
 pub fn attachment(filename: &str) -> BTreeMap<String, String> {
-    headers_map(&[(CONTENT_DISPOSITION, content_disposition_attachment(filename))])
+    headers_map(&[(
+        CONTENT_DISPOSITION,
+        content_disposition_attachment(filename),
+    )])
 }
 
 /// `{ Content-Disposition: inline; filename="..." }` (filename optional).

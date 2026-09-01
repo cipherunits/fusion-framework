@@ -126,10 +126,7 @@ pub fn paginate_slice<T: Clone>(items: &[T], params: &PageParams) -> Vec<T> {
         return Vec::new();
     }
     let start = params.offset as usize;
-    let end = params
-        .offset
-        .saturating_add(params.page_size)
-        .min(len) as usize;
+    let end = params.offset.saturating_add(params.page_size).min(len) as usize;
     items[start..end].to_vec()
 }
 
@@ -159,9 +156,11 @@ mod tests {
 
     #[test]
     fn parses_page_and_page_size() {
-        let params =
-            parse_page_params(&q(&[("page", "3"), ("page_size", "10")]), &PageConfig::default())
-                .unwrap();
+        let params = parse_page_params(
+            &q(&[("page", "3"), ("page_size", "10")]),
+            &PageConfig::default(),
+        )
+        .unwrap();
         assert_eq!(
             params,
             PageParams {

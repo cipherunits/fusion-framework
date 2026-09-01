@@ -34,3 +34,14 @@ manifest-path = "Cargo.toml"
 module-name = "fusion_framework._fusion"
 python-source = "python"
 features = ["pyo3/extension-module"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+src = ["python"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.format]
+quote-style = "double"

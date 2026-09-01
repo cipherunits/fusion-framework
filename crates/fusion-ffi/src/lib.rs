@@ -11,9 +11,9 @@ use std::path::PathBuf;
 use std::ptr;
 
 use fusion_core::{
-    api_resource_name, resolve_route_path, response_from_value, App, Handler, Request, Response,
-    render_template, Settings, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, attachment,
-    cache_control, content_type, download, inline, location,
+    App, HTTP_HEADER_CONSTANTS, HTTP_METHODS, HTTP_STATUS_CODES, Handler, Request, Response,
+    Settings, api_resource_name, attachment, cache_control, content_type, download, inline,
+    location, render_template, resolve_route_path, response_from_value,
 };
 use serde_json::{Map, Value};
 
@@ -48,7 +48,9 @@ fn cstr_to_str<'a>(p: *const c_char) -> &'a str {
 }
 
 fn to_cstring(s: &str) -> *mut c_char {
-    CString::new(s.replace('\0', "")).map(CString::into_raw).unwrap_or(ptr::null_mut())
+    CString::new(s.replace('\0', ""))
+        .map(CString::into_raw)
+        .unwrap_or(ptr::null_mut())
 }
 
 fn parse_json_object(raw: &str) -> Map<String, Value> {
@@ -324,11 +326,7 @@ pub extern "C" fn fusion_settings_load_json(
     };
     let env_opt = {
         let e = cstr_to_str(env);
-        if e.is_empty() {
-            None
-        } else {
-            Some(e)
-        }
+        if e.is_empty() { None } else { Some(e) }
     };
     let roots = parse_path_list(cstr_to_str(extra_roots_json));
     match handle

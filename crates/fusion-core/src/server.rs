@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bytes::Bytes;
-use console::{style, Term};
+use console::{Term, style};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::server::conn::http1;
@@ -17,7 +17,7 @@ use tokio::signal;
 
 use crate::error::{Error, Result};
 use crate::headers::apply_fingerprint_headers;
-use crate::request::{parse_query, Request};
+use crate::request::{Request, parse_query};
 use crate::response::Response;
 use crate::router::Router;
 
@@ -175,8 +175,7 @@ async fn handle_request(
         Err(_) => Bytes::new(),
     };
 
-    let request =
-        Request::new(method.clone(), path.clone(), headers, body_bytes).with_query(query);
+    let request = Request::new(method.clone(), path.clone(), headers, body_bytes).with_query(query);
 
     let mut response = router.dispatch(request).await;
     if options.fingerprint {
@@ -197,14 +196,12 @@ fn to_hyper_response(response: Response) -> HyperResponse<Full<Bytes>> {
     for (name, value) in &response.headers {
         builder = builder.header(name.as_str(), value.as_str());
     }
-    builder
-        .body(Full::new(response.body))
-        .unwrap_or_else(|_| {
-            HyperResponse::builder()
-                .status(500)
-                .body(Full::new(Bytes::from_static(b"Internal Server Error")))
-                .expect("fallback response")
-        })
+    builder.body(Full::new(response.body)).unwrap_or_else(|_| {
+        HyperResponse::builder()
+            .status(500)
+            .body(Full::new(Bytes::from_static(b"Internal Server Error")))
+            .expect("fallback response")
+    })
 }
 
 pub fn parse_addr(host: &str, port: u16) -> Result<SocketAddr> {

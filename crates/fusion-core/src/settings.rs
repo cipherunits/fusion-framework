@@ -22,9 +22,13 @@ fn resolve_value(value: &Value) -> Value {
         Value::String(s)
             if s.len() > 1
                 && s.chars().all(|c| c.is_ascii_uppercase() || c == '_')
-                && s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') =>
+                && s.chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphabetic() || c == '_') =>
         {
-            env::var(s).map(Value::String).unwrap_or_else(|_| value.clone())
+            env::var(s)
+                .map(Value::String)
+                .unwrap_or_else(|_| value.clone())
         }
         Value::Array(items) => Value::Array(items.iter().map(resolve_value).collect()),
         Value::Object(map) => {
@@ -112,14 +116,17 @@ impl Settings {
         let path = match path {
             Some(p) => {
                 if !p.is_file() {
-                    return Err(Error::Other(format!("settings json not found: {}", p.display())));
+                    return Err(Error::Other(format!(
+                        "settings json not found: {}",
+                        p.display()
+                    )));
                 }
                 p.to_path_buf()
             }
             None => {
-                let env_name = env_name
-                    .map(str::to_string)
-                    .unwrap_or_else(|| env::var("FUSION_ENV").unwrap_or_else(|_| self.env_name.clone()));
+                let env_name = env_name.map(str::to_string).unwrap_or_else(|| {
+                    env::var("FUSION_ENV").unwrap_or_else(|_| self.env_name.clone())
+                });
                 self.env_name = env_name.clone();
                 match find_json_file(&env_name, extra_roots) {
                     Some(p) => p,
@@ -164,7 +171,8 @@ impl Settings {
                 .or_insert_with(|| Value::Object(commands.clone()));
         }
 
-        self.loaded_from.push(path.canonicalize().unwrap_or(path).display().to_string());
+        self.loaded_from
+            .push(path.canonicalize().unwrap_or(path).display().to_string());
         self.auto_loaded = true;
         Ok(self)
     }
@@ -353,9 +361,7 @@ mod tests {
         .unwrap();
 
         let mut settings = Settings::new();
-        settings
-            .load_json(Some(&path), None, &[])
-            .unwrap();
+        settings.load_json(Some(&path), None, &[]).unwrap();
         assert_eq!(settings.host(), "0.0.0.0");
         assert_eq!(settings.port(), 8088);
         assert!(settings.debug());
