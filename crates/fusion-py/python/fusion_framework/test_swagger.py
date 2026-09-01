@@ -53,6 +53,14 @@ def test_route_versions_and_filtered_specs():
     assert "/health" in combined["paths"]
 
 
+def test_swagger_asset_urls():
+    from fusion_framework.app import _swagger_asset_url, _SWAGGER_ASSETS
+
+    assert _swagger_asset_url("/swagger", "swagger-ui.css") == "/swagger/assets/swagger-ui.css"
+    assert "swagger-ui-bundle.js" in _SWAGGER_ASSETS
+    assert "swagger-ui.css" in _SWAGGER_ASSETS
+
+
 def test_navbar_urls_list_each_version():
     @route("/hello", version="v1")
     class V1Hello(FusionBaseApi):

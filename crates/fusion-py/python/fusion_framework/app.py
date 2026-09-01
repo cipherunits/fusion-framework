@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from fusion_framework._fusion import (
@@ -91,7 +92,7 @@ def _swagger_settings(settings) -> dict[str, Any]:
         "showCommonExtensions": False,
         "syntaxHighlight": {"activated": True, "theme": "agate"},
         "withCredentials": False,
-        "validatorUrl": "https://validator.swagger.io/validator",
+        "validatorUrl": None,
     }
     ui.update(_as_dict(settings.get("swagger.ui", default={})))
     # auth.persistAuthorization wins over ui.persistAuthorization when set under auth.
@@ -126,6 +127,40 @@ def _swagger_settings(settings) -> dict[str, Any]:
 
 
 UNVERSIONED_SWAGGER_NAME = "default"
+
+_SWAGGER_ASSETS_DIR = Path(__file__).resolve().parent / "static" / "swagger-ui"
+_SWAGGER_ASSET_TYPES: dict[str, str] = {
+    "swagger-ui-bundle.js": "application/javascript; charset=utf-8",
+    "swagger-ui-standalone-preset.js": "application/javascript; charset=utf-8",
+    "swagger-ui.css": "text/css; charset=utf-8",
+}
+
+
+def _swagger_asset_url(prefix: str, name: str) -> str:
+    return f"{prefix}/assets/{name}"
+
+
+def _load_swagger_assets() -> dict[str, tuple[str, str]]:
+    loaded: dict[str, tuple[str, str]] = {}
+    for name, content_type in _SWAGGER_ASSET_TYPES.items():
+        path = _SWAGGER_ASSETS_DIR / name
+        if path.is_file():
+            loaded[name] = (content_type, path.read_text(encoding="utf-8"))
+    return loaded
+
+
+_SWAGGER_ASSETS = _load_swagger_assets()
+
+
+def _mount_swagger_assets(engine, prefix: str) -> None:
+    assets_prefix = f"{prefix}/assets"
+    for name, (content_type, body) in _SWAGGER_ASSETS.items():
+
+        def _asset(_req, body=body, content_type=content_type):
+            return {"status": 200, "body": body, "headers": {"content-type": content_type}}
+
+        engine.route("GET", f"{assets_prefix}/{name}", _asset)
+
 
 
 def _normalize_version_label(value: Any) -> str:
@@ -195,6 +230,7 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str, primary_name: st
     ui_opts = dict(swagger["ui"])
     navbar = swagger["navbar"]
     auth = swagger["auth"]
+    prefix = swagger["path"]
 
     # presets/layout/plugins are set in JS so we can reference SwaggerUIBundle globals.
     ui_opts.pop("presets", None)
@@ -233,7 +269,7 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str, primary_name: st
     standalone_script = ""
     if navbar_enabled:
         standalone_script = (
-            '<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>'
+            f'<script src="{_swagger_asset_url(prefix, "swagger-ui-standalone-preset.js")}"></script>'
         )
 
     bootstrap = f"""
@@ -262,12 +298,12 @@ def _swagger_ui_html(swagger: dict[str, Any], openapi_url: str, primary_name: st
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+    <link rel="stylesheet" href="{_swagger_asset_url(prefix, "swagger-ui.css")}" />
     {hide_url_css}
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    <script src="{_swagger_asset_url(prefix, "swagger-ui-bundle.js")}"></script>
     {standalone_script}
     <script>
 {bootstrap}
@@ -282,6 +318,7 @@ def _html_response(html: str) -> dict:
 
 def _mount_swagger(engine, swagger: dict[str, Any]) -> None:
     prefix = swagger["path"]
+    _mount_swagger_assets(engine, prefix)
     labels = _apply_version_navbar(swagger)
 
     combined = _build_openapi(swagger)

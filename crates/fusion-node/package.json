@@ -45,6 +45,7 @@
     "index.d.ts",
     "README.md",
     "LICENSE",
+    "static/swagger-ui/**",
     "*.node"
   ],
   "napi": {

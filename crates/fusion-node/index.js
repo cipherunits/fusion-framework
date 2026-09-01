@@ -653,7 +653,7 @@ function readSwaggerSettings() {
     showCommonExtensions: false,
     syntaxHighlight: { activated: true, theme: 'agate' },
     withCredentials: false,
-    validatorUrl: 'https://validator.swagger.io/validator',
+    validatorUrl: null,
     ...asObject(settings.get('swagger.ui', {})),
   }
   if (Object.prototype.hasOwnProperty.call(authRaw, 'persistAuthorization')) {
@@ -681,6 +681,40 @@ function readSwaggerSettings() {
 }
 
 const UNVERSIONED_SWAGGER_NAME = 'default'
+
+const SWAGGER_ASSETS_DIR = path.join(__dirname, 'static', 'swagger-ui')
+const SWAGGER_ASSET_TYPES = {
+  'swagger-ui-bundle.js': 'application/javascript; charset=utf-8',
+  'swagger-ui-standalone-preset.js': 'application/javascript; charset=utf-8',
+  'swagger-ui.css': 'text/css; charset=utf-8',
+}
+
+function loadSwaggerAssets() {
+  const out = {}
+  for (const [name, contentType] of Object.entries(SWAGGER_ASSET_TYPES)) {
+    const filePath = path.join(SWAGGER_ASSETS_DIR, name)
+    if (!fs.existsSync(filePath)) continue
+    out[name] = { contentType, body: fs.readFileSync(filePath, 'utf8') }
+  }
+  return out
+}
+
+const SWAGGER_ASSETS = loadSwaggerAssets()
+
+function swaggerAssetUrl(prefix, name) {
+  return `${prefix}/assets/${name}`
+}
+
+function mountSwaggerAssets(engine, prefix) {
+  const assetsPrefix = `${prefix}/assets`
+  for (const [name, { contentType, body }] of Object.entries(SWAGGER_ASSETS)) {
+    engine.route('GET', `${assetsPrefix}/${name}`, () => ({
+      status: 200,
+      body,
+      headers: { 'content-type': contentType },
+    }))
+  }
+}
 
 function normalizeVersionLabel(value) {
   return String(value || '')
@@ -845,7 +879,7 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
     </style>`
       : ''
   const standaloneScript = navbarEnabled
-    ? `<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-standalone-preset.js"></script>`
+    ? `<script src="${swaggerAssetUrl(swagger.path, 'swagger-ui-standalone-preset.js')}"></script>`
     : ''
 
   return `<!doctype html>
@@ -854,12 +888,12 @@ function swaggerUiHtml(swagger, openapiUrl, primaryName = null) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${title}</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+    <link rel="stylesheet" href="${swaggerAssetUrl(swagger.path, 'swagger-ui.css')}" />
     ${hideUrlCss}
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js"></script>
+    <script src="${swaggerAssetUrl(swagger.path, 'swagger-ui-bundle.js')}"></script>
     ${standaloneScript}
     <script>
       window.onload = function() {
@@ -926,6 +960,7 @@ class FusionApp {
     const swagger = readSwaggerSettings()
     if (swagger.enabled) {
       const prefix = swagger.path
+      mountSwaggerAssets(this.engine, prefix)
       const labels = applyVersionNavbar(swagger)
       const combined = buildOpenApi(swagger)
 
