@@ -6,8 +6,10 @@ import inspect
 from fusion_framework.middleware import (
     bearer_jwt,
     clear_active_global,
+    cors,
     dispatch_route,
     framework_headers,
+    request_id,
     require_roles,
     set_active_global,
 )
@@ -62,6 +64,36 @@ def test_no_middleware_by_default():
         assert result["status"] == 200
         headers = {str(k).lower(): v for k, v in (result.get("headers") or {}).items()}
         assert "x-powered-by" not in headers
+    finally:
+        clear_active_global()
+
+
+def test_request_id_header():
+    clear_active_global()
+    set_active_global([request_id()])
+    try:
+        request = {"path": "/", "headers": {}, "method": "GET"}
+        result = dispatch_route(request, _handler, [])
+        headers = {str(k).lower(): v for k, v in (result.get("headers") or {}).items()}
+        assert "x-request-id" in headers
+        assert result["body"]["state"]["request_id"] == headers["x-request-id"]
+    finally:
+        clear_active_global()
+
+
+def test_cors_options_preflight():
+    clear_active_global()
+    set_active_global([cors()])
+    try:
+        request = {
+            "path": "/api",
+            "headers": {"Origin": "https://example.com"},
+            "method": "OPTIONS",
+        }
+        result = dispatch_route(request, _handler, [])
+        assert result["status"] == 204
+        headers = {str(k).lower(): v for k, v in (result.get("headers") or {}).items()}
+        assert headers.get("access-control-allow-origin")
     finally:
         clear_active_global()
 

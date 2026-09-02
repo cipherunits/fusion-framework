@@ -85,7 +85,7 @@ fn collect_templates(
             continue;
         }
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        if ext != "html" && ext != "tera" {
+        if ext != "html" && ext != "tera" && ext != "css" {
             continue;
         }
         let rel = path
@@ -142,6 +142,23 @@ mod tests {
         let html = render_template("test.html", &json!({}), &dir).unwrap();
         assert!(html.contains("fusion-btn"));
         assert!(html.contains("Go"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn includes_css_partial() {
+        clear_template_cache();
+        let dir = std::env::temp_dir().join("fusion_tpl_css_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("home")).unwrap();
+        std::fs::write(dir.join("home/style.css"), "body { color: red; }").unwrap();
+        std::fs::write(
+            dir.join("home/index.html"),
+            r#"<style>{% include "home/style.css" %}</style>"#,
+        )
+        .unwrap();
+        let html = render_template("home/index.html", &json!({}), &dir).unwrap();
+        assert!(html.contains("color: red"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

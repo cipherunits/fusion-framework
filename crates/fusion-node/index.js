@@ -168,6 +168,105 @@ function frameworkHeaders() {
   }
 }
 
+function getHeader(request, name) {
+  const headers = request.headers || {}
+  const target = String(name).toLowerCase()
+  for (const [key, value] of Object.entries(headers)) {
+    if (String(key).toLowerCase() === target) return String(value)
+  }
+  return null
+}
+
+function headerMiddleware(extra) {
+  return async (request, callNext) => {
+    const result = await awaitMaybe(callNext(request))
+    return mergeResponseHeaders(result, extra)
+  }
+}
+
+function securityHeaders(options = {}) {
+  const extra = {
+    'X-Content-Type-Options': options.contentTypeOptions ?? 'nosniff',
+    'X-Frame-Options': options.frameOptions ?? 'DENY',
+    'Referrer-Policy': options.referrerPolicy ?? 'strict-origin-when-cross-origin',
+    'Permissions-Policy':
+      options.permissionsPolicy ?? 'camera=(), microphone=(), geolocation=(), payment=()',
+    'Cross-Origin-Opener-Policy': options.coop ?? 'same-origin',
+    'Cross-Origin-Resource-Policy': options.corp ?? 'same-origin',
+  }
+  if (options.csp) extra['Content-Security-Policy'] = String(options.csp)
+  if (options.hsts) extra['Strict-Transport-Security'] = String(options.hsts)
+  return headerMiddleware(extra)
+}
+
+function cacheHeaders(options = {}) {
+  return headerMiddleware({
+    'Cache-Control': options.default ?? options.value ?? 'no-store',
+  })
+}
+
+function requestId(options = {}) {
+  const headerName = options.header ?? 'X-Request-Id'
+  const incoming = options.incoming !== false
+  return async (request, callNext) => {
+    const state = ensureState(request)
+    let rid = incoming ? getHeader(request, headerName) : null
+    if (!rid) {
+      rid =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    }
+    state.request_id = rid
+    const result = await awaitMaybe(callNext(request))
+    return mergeResponseHeaders(result, { [headerName]: rid })
+  }
+}
+
+function cors(options = {}) {
+  const origins = Array.isArray(options.allowOrigins)
+    ? options.allowOrigins.map(String)
+    : [String(options.allowOrigins ?? '*')]
+  const methods = (
+    options.allowMethods ?? ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD']
+  ).map((m) => String(m).toUpperCase())
+  const allowHeaders = (
+    options.allowHeaders ?? ['Authorization', 'Content-Type', 'Accept', 'Origin', 'X-Request-Id']
+  ).map(String)
+  const exposeHeaders = (options.exposeHeaders ?? ['X-Request-Id']).map(String)
+  const allowCredentials = !!options.allowCredentials
+  const maxAge = Number(options.maxAge ?? 600)
+  const allowAll = origins.includes('*')
+
+  function corsHeaders(origin) {
+    let chosen = '*'
+    if (!allowAll) {
+      if (origin && origins.includes(origin)) chosen = origin
+      else if (origins.length) chosen = origins[0]
+    }
+    const out = {
+      'Access-Control-Allow-Origin': chosen,
+      'Access-Control-Allow-Methods': methods.join(', '),
+      'Access-Control-Allow-Headers': allowHeaders.join(', '),
+      'Access-Control-Expose-Headers': exposeHeaders.join(', '),
+      'Access-Control-Max-Age': String(maxAge),
+      Vary: 'Origin',
+    }
+    if (allowCredentials && chosen !== '*') out['Access-Control-Allow-Credentials'] = 'true'
+    return out
+  }
+
+  return async (request, callNext) => {
+    const origin = getHeader(request, 'Origin')
+    const extra = corsHeaders(origin)
+    if (String(request.method || 'GET').toUpperCase() === 'OPTIONS') {
+      return { status: 204, body: '', headers: extra }
+    }
+    const result = await awaitMaybe(callNext(request))
+    return mergeResponseHeaders(result, extra)
+  }
+}
+
 class FusionBaseApi {
   constructor(request) {
     this.request = request && typeof request === 'object' ? request : emptyRequest()
@@ -1161,6 +1260,10 @@ module.exports = {
   bearerJwt,
   requireRoles,
   frameworkHeaders,
+  securityHeaders,
+  cors,
+  cacheHeaders,
+  requestId,
   runMiddlewareChain,
   coerceParam,
   parsePagination,

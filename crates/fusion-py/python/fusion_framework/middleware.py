@@ -256,6 +256,132 @@ def framework_headers() -> Middleware:
     return middleware
 
 
+def _get_header(request: RequestDict, name: str) -> str | None:
+    headers = request.get("headers") or {}
+    target = name.lower()
+    for key, value in headers.items():
+        if str(key).lower() == target:
+            return str(value)
+    return None
+
+
+def security_headers(
+    *,
+    content_type_options: str = "nosniff",
+    frame_options: str = "DENY",
+    referrer_policy: str = "strict-origin-when-cross-origin",
+    permissions_policy: str = "camera=(), microphone=(), geolocation=(), payment=()",
+    coop: str = "same-origin",
+    corp: str = "same-origin",
+    csp: str | None = None,
+    hsts: str | None = None,
+) -> Middleware:
+    """Add common security response headers."""
+    extra: dict[str, str] = {
+        "X-Content-Type-Options": content_type_options,
+        "X-Frame-Options": frame_options,
+        "Referrer-Policy": referrer_policy,
+        "Permissions-Policy": permissions_policy,
+        "Cross-Origin-Opener-Policy": coop,
+        "Cross-Origin-Resource-Policy": corp,
+    }
+    if csp:
+        extra["Content-Security-Policy"] = csp
+    if hsts:
+        extra["Strict-Transport-Security"] = hsts
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        return _call_next_merge_headers(call_next, request, extra)
+
+    return middleware
+
+
+def cache_headers(*, default: str = "no-store") -> Middleware:
+    """Set ``Cache-Control`` on responses that do not already define it."""
+    extra = {"Cache-Control": default}
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        return _call_next_merge_headers(call_next, request, extra)
+
+    return middleware
+
+
+def request_id(
+    *,
+    header: str = "X-Request-Id",
+    incoming: bool = True,
+) -> Middleware:
+    """Attach a request id to ``state`` and echo it on the response."""
+    import uuid
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        state = _ensure_state(request)
+        rid = _get_header(request, header) if incoming else None
+        if not rid:
+            rid = str(uuid.uuid4())
+        state["request_id"] = rid
+        return _call_next_merge_headers(call_next, request, {header: rid})
+
+    return middleware
+
+
+def cors(
+    *,
+    allow_origins: Iterable[str] | str = "*",
+    allow_methods: Iterable[str] | None = None,
+    allow_headers: Iterable[str] | None = None,
+    expose_headers: Iterable[str] | None = None,
+    allow_credentials: bool = False,
+    max_age: int = 600,
+) -> Middleware:
+    """CORS middleware; short-circuits ``OPTIONS`` preflight with 204."""
+    origins = (
+        [str(allow_origins)]
+        if isinstance(allow_origins, str)
+        else [str(o) for o in allow_origins]
+    )
+    methods = (
+        ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
+        if allow_methods is None
+        else [str(m).upper() for m in allow_methods]
+    )
+    headers = (
+        ["Authorization", "Content-Type", "Accept", "Origin", "X-Request-Id"]
+        if allow_headers is None
+        else [str(h) for h in allow_headers]
+    )
+    expose = ["X-Request-Id"] if expose_headers is None else [str(h) for h in expose_headers]
+    allow_all = "*" in origins
+
+    def _cors_headers(origin: str | None) -> dict[str, str]:
+        chosen = "*"
+        if not allow_all:
+            if origin and origin in origins:
+                chosen = origin
+            elif origins:
+                chosen = origins[0]
+        out = {
+            "Access-Control-Allow-Origin": chosen,
+            "Access-Control-Allow-Methods": ", ".join(methods),
+            "Access-Control-Allow-Headers": ", ".join(headers),
+            "Access-Control-Expose-Headers": ", ".join(expose),
+            "Access-Control-Max-Age": str(max_age),
+            "Vary": "Origin",
+        }
+        if allow_credentials and chosen != "*":
+            out["Access-Control-Allow-Credentials"] = "true"
+        return out
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        origin = _get_header(request, "Origin")
+        extra = _cors_headers(origin)
+        if str(request.get("method", "GET")).upper() == "OPTIONS":
+            return {"status": 204, "body": "", "headers": extra}
+        return _call_next_merge_headers(call_next, request, extra)
+
+    return middleware
+
+
 def dispatch_route(
     request: RequestDict,
     handler: Callable[[RequestDict], Any],
