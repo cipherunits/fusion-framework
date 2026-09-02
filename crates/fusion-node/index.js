@@ -367,6 +367,7 @@ function prefersJsonFallback(accept, formatQuery) {
 }
 
 class FusionBaseTemplate extends FusionBaseApi {
+  static __fusion_template__ = true
   static template = ''
   static templateAddress = ''
   static templatesDir = ''
@@ -969,6 +970,15 @@ function applySwaggerOpenApi(openapi, swagger) {
   return openapi
 }
 
+function isTemplateClass(ApiClass) {
+  let current = ApiClass
+  while (current && current !== Function.prototype) {
+    if (current === FusionBaseTemplate || current.__fusion_template__) return true
+    current = Object.getPrototypeOf(current)
+  }
+  return false
+}
+
 function fillOpenApiPaths(openapi, versionFilter = null) {
   const parsePathParams = (pattern) => {
     return String(pattern)
@@ -980,6 +990,7 @@ function fillOpenApiPaths(openapi, versionFilter = null) {
   for (const item of registry) {
     if (!routeMatchesVersion(item, versionFilter)) continue
     const { ApiClass, swagger: routeSwagger } = item
+    if (isTemplateClass(ApiClass)) continue
     const slots = item.slots || []
 
     for (const slot of slots) {

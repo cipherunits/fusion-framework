@@ -861,6 +861,30 @@ fn annotation_kind(py: Python<'_>, annotation: &Bound<'_, PyAny>) -> PyResult<Pa
     }
 }
 
+fn is_template_class(py: Python<'_>, api_cls: &Bound<'_, PyType>) -> bool {
+    if api_cls
+        .getattr("__fusion_template__")
+        .ok()
+        .and_then(|v| v.extract::<bool>().ok())
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    let Ok(template_mod) = py.import("fusion_framework.template") else {
+        return false;
+    };
+    let Ok(base) = template_mod.getattr("FusionBaseTemplate") else {
+        return false;
+    };
+    let Ok(issubclass) = py.import("builtins").and_then(|m| m.getattr("issubclass")) else {
+        return false;
+    };
+    issubclass
+        .call1((api_cls, base))
+        .and_then(|v| v.extract())
+        .unwrap_or(false)
+}
+
 pub fn openapi_spec() -> serde_json::Value {
     openapi_spec_for(None)
 }
@@ -884,6 +908,12 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
 
     for r in routes_guard.iter() {
         if !route_matches_version_filter(r.version.as_deref(), version) {
+            continue;
+        }
+
+        // HTML template pages are not REST API operations — omit from Swagger.
+        let is_template = Python::with_gil(|py| is_template_class(py, &r.api_cls.bind(py)));
+        if is_template {
             continue;
         }
 
