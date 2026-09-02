@@ -113,6 +113,22 @@ async def run_chain(
     return await dispatch(0, request)
 
 
+def require_permissions(*checks: Callable[[RequestDict], Any]) -> Middleware:
+    """Route middleware: run custom permission checks; any falsy result → 403.
+
+    Each check receives the request dict (``method``, ``path``, ``headers``,
+    ``body``, ``state``, …). Omit checks to allow any caller (default).
+    """
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        for check in checks:
+            if not check(request):
+                return {"status": 403, "body": {"detail": "Forbidden"}}
+        return call_next(request)
+
+    return middleware
+
+
 def require_roles(
     *roles: str,
     claim: str = "roles",

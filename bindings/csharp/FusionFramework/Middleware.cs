@@ -4,6 +4,9 @@ using System.Text.Json.Nodes;
 
 namespace FusionFramework;
 
+/// <summary>Custom route permission check — return <c>false</c> to deny with HTTP 403.</summary>
+public delegate bool FusionPermission(FusionRequest request);
+
 public delegate object? FusionMiddleware(FusionRequest request, Func<FusionRequest, object?> callNext);
 
 public static class Middleware
@@ -185,6 +188,24 @@ public static class Middleware
 
     public static FusionMiddleware RequireRoles(params string[] roles) =>
         RequireRoles((IEnumerable<string>)roles);
+
+    /// <summary>Route middleware: run custom permission checks; any failure → 403.</summary>
+    public static FusionMiddleware RequirePermissions(params FusionPermission[] checks) =>
+        RequirePermissions((IEnumerable<FusionPermission>)checks);
+
+    public static FusionMiddleware RequirePermissions(IEnumerable<FusionPermission> checks)
+    {
+        var list = checks.ToList();
+        return (request, callNext) =>
+        {
+            foreach (var check in list)
+            {
+                if (!check(request))
+                    return Error(403, "Forbidden");
+            }
+            return callNext(request);
+        };
+    }
 
     /// <summary>Common security response headers.</summary>
     public static FusionMiddleware SecurityHeaders(

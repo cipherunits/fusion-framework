@@ -14,9 +14,7 @@ public sealed class RouteAttribute : Attribute
     public string? Title { get; set; }
     public string? Version { get; set; }
     public bool Deprecated { get; set; }
-    public string[]? Roles { get; set; }
-    public string RoleClaim { get; set; } = "roles";
-    public string RoleStateKey { get; set; } = "jwt";
+    public Type[]? PermissionTypes { get; set; }
 
     public RouteAttribute(string path) => Path = path;
 }
@@ -44,6 +42,7 @@ internal sealed class RouteEntry
     public string? Desc { get; init; }
     public string? Title { get; init; }
     public bool Deprecated { get; init; }
+    public bool RequiresPermissions { get; init; }
     public List<RouteMountSlot> Slots { get; init; } = new();
 }
 
@@ -149,10 +148,8 @@ public static class Route
         Type apiClass,
         string path,
         IEnumerable<FusionMiddleware>? middleware = null,
-        IEnumerable<string>? roles = null,
+        IEnumerable<FusionPermission>? permissions = null,
         string? version = null,
-        string roleClaim = "roles",
-        string roleStateKey = "jwt",
         IEnumerable<string>? tags = null,
         string? desc = null,
         string? title = null,
@@ -167,12 +164,10 @@ public static class Route
             resolved = $"{v}/{resolved.TrimStart('/')}";
 
         var chain = middleware?.ToList() ?? new List<FusionMiddleware>();
-        if (roles != null)
-        {
-            var roleList = roles.ToList();
-            if (roleList.Count > 0)
-                chain.Add(Middleware.RequireRoles(roleList, roleClaim, roleStateKey));
-        }
+        var permissionChecks = ResolvePermissions(permissions).ToList();
+        var requiresPermissions = permissionChecks.Count > 0;
+        if (requiresPermissions)
+            chain.Add(Middleware.RequirePermissions(permissionChecks));
 
         var classBasePath = resolved.StartsWith('/') ? resolved : "/" + resolved;
         var classTags = tags?.ToArray() ?? Array.Empty<string>();
@@ -190,10 +185,39 @@ public static class Route
                 Desc = desc,
                 Title = title,
                 Deprecated = deprecated,
+                RequiresPermissions = requiresPermissions,
                 Slots = BuildSlots(apiClass, classBasePath, classTags, desc, title, deprecated),
             });
         }
         return apiClass;
+    }
+
+    static IEnumerable<FusionPermission> ResolvePermissions(IEnumerable<FusionPermission>? permissions)
+    {
+        if (permissions is null) yield break;
+        foreach (var check in permissions)
+            yield return check;
+    }
+
+    static IEnumerable<FusionPermission> ResolvePermissionTypes(Type[]? types)
+    {
+        if (types is null || types.Length == 0) yield break;
+        foreach (var type in types)
+        {
+            var method = type.GetMethod(
+                "Check",
+                BindingFlags.Public | BindingFlags.Static,
+                binder: null,
+                types: new[] { typeof(FusionRequest) },
+                modifiers: null);
+            if (method is null)
+            {
+                throw new InvalidOperationException(
+                    $"{type.Name} must define public static bool Check(FusionRequest request)");
+            }
+            yield return request => (bool)(method.Invoke(null, new object[] { request })
+                ?? throw new InvalidOperationException($"{type.Name}.Check returned null"));
+        }
     }
 
     public static Type Register<T>() where T : FusionBaseApi
@@ -203,10 +227,8 @@ public static class Route
         return Register(
             typeof(T),
             attr.Path,
-            roles: attr.Roles,
+            permissions: ResolvePermissionTypes(attr.PermissionTypes),
             version: attr.Version,
-            roleClaim: attr.RoleClaim,
-            roleStateKey: attr.RoleStateKey,
             tags: attr.Tags,
             desc: attr.Desc,
             title: attr.Title,
@@ -226,10 +248,8 @@ public static class Route
             Register(
                 type,
                 attr.Path,
-                roles: attr.Roles,
+                permissions: ResolvePermissionTypes(attr.PermissionTypes),
                 version: attr.Version,
-                roleClaim: attr.RoleClaim,
-                roleStateKey: attr.RoleStateKey,
                 tags: attr.Tags,
                 desc: attr.Desc,
                 title: attr.Title,

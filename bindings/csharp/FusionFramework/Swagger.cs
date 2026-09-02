@@ -215,16 +215,40 @@ internal static class SwaggerDocs
         if (swagger.AuthGlobal.Count > 0)
             spec["security"] = swagger.AuthGlobal.DeepClone();
 
-        FillPaths((JsonObject)spec["paths"]!, version);
+        var anyPermissions = FillPaths((JsonObject)spec["paths"]!, version);
+        if (anyPermissions)
+        {
+            if (spec["components"] is not JsonObject components)
+            {
+                components = new JsonObject();
+                spec["components"] = components;
+            }
+            if (components["securitySchemes"] is not JsonObject schemes)
+            {
+                schemes = new JsonObject();
+                components["securitySchemes"] = schemes;
+            }
+            schemes["FusionPermissions"] = new JsonObject
+            {
+                ["type"] = "apiKey",
+                ["in"] = "header",
+                ["name"] = "Authorization",
+                ["description"] = "Route requires custom permission checks to pass",
+            };
+        }
         return spec;
     }
 
-    static void FillPaths(JsonObject paths, string? versionFilter)
+    static bool FillPaths(JsonObject paths, string? versionFilter)
     {
+        const string permissionsScheme = "FusionPermissions";
+        var anyPermissions = false;
+
         foreach (var entry in Route.Snapshot())
         {
             if (!MatchesVersion(entry.Version, versionFilter)) continue;
             if (typeof(FusionBaseTemplate).IsAssignableFrom(entry.ApiClass)) continue;
+            if (entry.RequiresPermissions) anyPermissions = true;
 
             foreach (var slot in entry.Slots)
             {
@@ -338,9 +362,26 @@ internal static class SwaggerDocs
                     };
                 }
 
+                if (entry.RequiresPermissions)
+                {
+                    operation["security"] = new JsonArray
+                    {
+                        new JsonObject { [permissionsScheme] = new JsonArray() },
+                    };
+                    if (operation["responses"] is JsonObject responses)
+                    {
+                        responses["403"] = new JsonObject
+                        {
+                            ["description"] = "Forbidden — permission check failed",
+                        };
+                    }
+                }
+
                 methods[methodLower] = operation;
             }
         }
+
+        return anyPermissions;
     }
 
     static bool MatchesVersion(string? routeVersion, string? filter)

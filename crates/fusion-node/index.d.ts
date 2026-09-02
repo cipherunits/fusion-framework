@@ -83,9 +83,7 @@ export type RouteOptions = {
   version?: string
   deprecated?: boolean
   middleware?: FusionMiddleware[]
-  roles?: string[]
-  roleClaim?: string
-  roleStateKey?: string
+  permissions?: Array<(request: FusionRequest) => boolean>
 }
 
 export function router(path: string, options?: RouteOptions): <T>(ApiClass: T) => T
@@ -97,6 +95,10 @@ export function bearerJwt(options?: {
   header?: string
   verify?: (token: string) => Record<string, unknown> | null
 }): FusionMiddleware
+
+export function requirePermissions(
+  ...checks: Array<(request: FusionRequest) => boolean>
+): FusionMiddleware
 
 export function requireRoles(...roles: string[]): FusionMiddleware
 export function requireRoles(options: {

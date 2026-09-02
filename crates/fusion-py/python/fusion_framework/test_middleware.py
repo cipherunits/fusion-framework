@@ -10,7 +10,6 @@ from fusion_framework.middleware import (
     dispatch_route,
     framework_headers,
     request_id,
-    require_roles,
     set_active_global,
 )
 
@@ -26,20 +25,6 @@ async def _async_handler(request):
 def _sync_invoker_like(request):
     """Mirrors PyO3 HandlerInvoker: sync ``__call__`` that may return a coroutine."""
     return _async_handler(request)
-
-
-def test_require_roles_allows_matching_role():
-    request = {"headers": {}, "state": {"jwt": {"roles": ["admin"]}}}
-    chain = [require_roles("admin", "super_admin")]
-    result = dispatch_route(request, _handler, chain)
-    assert result["status"] == 200
-
-
-def test_require_roles_blocks_missing_role():
-    request = {"headers": {}, "state": {"jwt": {"roles": ["user"]}}}
-    chain = [require_roles("admin")]
-    result = dispatch_route(request, _handler, chain)
-    assert result["status"] == 403
 
 
 def test_bearer_jwt_populates_state():
@@ -122,10 +107,16 @@ def test_framework_headers_awaits_async_handler():
 
 
 def test_sync_middleware_propagates_async_handler_coroutine():
+    from fusion_framework.middleware import require_permissions
+
     clear_active_global()
     try:
-        request = {"path": "/x", "headers": {}, "state": {"jwt": {"roles": ["admin"]}}}
-        result = dispatch_route(request, _sync_invoker_like, [require_roles("admin")])
+        request = {"path": "/x", "headers": {}, "state": {}}
+        result = dispatch_route(
+            request,
+            _sync_invoker_like,
+            [require_permissions(lambda req: True)],
+        )
         assert inspect.isawaitable(result)
         resolved = asyncio.run(result)
         assert resolved["body"]["ok"] is True

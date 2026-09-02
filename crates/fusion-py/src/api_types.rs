@@ -273,6 +273,7 @@ struct RegisteredRoute {
     middleware: Vec<Py<PyAny>>,
     /// Normalized route version (`v1`), if the `@route(..., version=)` was set.
     version: Option<String>,
+    requires_permissions: bool,
     slots: Vec<RouteMountSlot>,
 }
 
@@ -339,6 +340,7 @@ pub fn register_route(
     version: Option<String>,
     deprecated: bool,
     middleware: Vec<Py<PyAny>>,
+    requires_permissions: bool,
 ) -> PyResult<String> {
     let py = api_cls.py();
 
@@ -414,6 +416,7 @@ pub fn register_route(
             api_cls: api_cls.unbind(),
             middleware,
             version,
+            requires_permissions,
             slots,
         });
 
@@ -897,6 +900,7 @@ pub fn openapi_spec() -> serde_json::Value {
 pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
     use serde_json::{Map, Value, json};
     const OPENAPI_VERSION: &str = "3.0.3";
+    const PERMISSIONS_SCHEME: &str = "FusionPermissions";
 
     let routes_guard = match REGISTRY.lock() {
         Ok(g) => g,
@@ -905,6 +909,7 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
 
     let mut tags_set: std::collections::BTreeSet<String> = Default::default();
     let mut paths: Map<String, Value> = Map::new();
+    let mut any_permissions = false;
 
     for r in routes_guard.iter() {
         if !route_matches_version_filter(r.version.as_deref(), version) {
@@ -1029,6 +1034,22 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                 }
             }
 
+            if r.requires_permissions {
+                any_permissions = true;
+                if let Some(obj) = op.as_object_mut() {
+                    obj.insert(
+                        "security".to_string(),
+                        json!([{ PERMISSIONS_SCHEME: [] }]),
+                    );
+                    if let Some(resp) = obj.get_mut("responses").and_then(|v| v.as_object_mut()) {
+                        resp.insert(
+                            "403".to_string(),
+                            json!({ "description": "Forbidden — permission check failed" }),
+                        );
+                    }
+                }
+            }
+
             let methods_obj = paths
                 .entry(resolved_path)
                 .or_insert_with(|| Value::Object(Map::new()));
@@ -1059,8 +1080,25 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
         "info": { "title": "fusion-framework", "version": "0.1.0" },
         "paths": paths,
     });
-    if let (Some(t), Some(spec_obj)) = (tags, spec.as_object_mut()) {
-        spec_obj.insert("tags".to_string(), Value::Array(t));
+    if let Some(spec_obj) = spec.as_object_mut() {
+        if any_permissions {
+            spec_obj.insert(
+                "components".to_string(),
+                json!({
+                    "securitySchemes": {
+                        PERMISSIONS_SCHEME: {
+                            "type": "apiKey",
+                            "in": "header",
+                            "name": "Authorization",
+                            "description": "Route requires custom permission checks to pass",
+                        }
+                    }
+                }),
+            );
+        }
+        if let Some(t) = tags {
+            spec_obj.insert("tags".to_string(), Value::Array(t));
+        }
     }
 
     spec
