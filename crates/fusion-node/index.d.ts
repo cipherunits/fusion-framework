@@ -64,7 +64,16 @@ export class FusionApp {
   constructor(settings?: Partial<FusionSettings>)
   use(middleware: FusionMiddleware): void
   mount(): void
-  listen(host?: string, port?: number): Promise<void>
+  listen(
+    host?: string | {
+      host?: string
+      port?: number
+      reload?: boolean
+      watchDirs?: string[]
+    },
+    port?: number,
+    options?: { reload?: boolean; watchDirs?: string[] },
+  ): Promise<void>
 }
 
 export type RouteOptions = {

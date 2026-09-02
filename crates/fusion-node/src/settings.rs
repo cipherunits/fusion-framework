@@ -125,6 +125,16 @@ impl Settings {
     }
 
     #[napi(getter)]
+    pub fn reload(&self) -> Result<bool> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| Error::from_reason("settings lock poisoned"))?;
+        let _ = guard.ensure_loaded(&[]);
+        Ok(guard.reload())
+    }
+
+    #[napi(getter)]
     pub fn env(&self) -> Result<String> {
         let mut guard = self
             .inner

@@ -45,6 +45,14 @@ if __name__ == "__main__":
     main()
 ```
 
+### Auto-reload (development)
+
+```python
+app.listen(reload=True)   # restart when files change
+app.listen(reload=False)  # never reload (default)
+# or in fusion.dev.json: { "reload": true }
+```
+
 ## Docs
 
 Full guides (router, config, middleware, async):  

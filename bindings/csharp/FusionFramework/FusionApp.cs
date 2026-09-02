@@ -140,18 +140,44 @@ public sealed class FusionApp : IDisposable
             throw new InvalidOperationException($"Failed to register {method} {path}");
     }
 
-    public void Listen(string? host = null, ushort port = 0)
+    public void Listen(string? host = null, ushort port = 0, bool? reload = null, IEnumerable<string>? watchDirs = null)
     {
-        Mount();
         var settings = SettingsStore.Current;
+        var settingsReload = Truthy(settings.Get("reload", false));
+        var shouldReload = Reloader.Resolve(reload, settingsReload);
+
+        if (shouldReload && !Reloader.IsChild)
+        {
+            Reloader.RunWithReloader(watchDirs);
+            return;
+        }
+
+        Mount();
         host ??= settings.Host;
         if (port == 0) port = settings.Port;
+        if (settings.Debug || shouldReload)
+        {
+            var mode = shouldReload ? " (reload)" : "";
+            Console.WriteLine($"fusion listening on http://{host}:{port}{mode}");
+        }
 
         var code = Native.fusion_app_listen(_app, host, port);
         // listen consumes the native app
         _app = IntPtr.Zero;
         if (code != 0)
             throw new InvalidOperationException("fusion_app_listen failed");
+    }
+
+    static bool Truthy(System.Text.Json.Nodes.JsonNode? node, bool fallback = false)
+    {
+        if (node is null) return fallback;
+        if (node is System.Text.Json.Nodes.JsonValue v)
+        {
+            if (v.TryGetValue<bool>(out var b)) return b;
+            if (v.TryGetValue<string>(out var s))
+                return s is "1" or "true" or "True" or "yes" or "on";
+        }
+        return fallback;
     }
 
     public void Dispose()
