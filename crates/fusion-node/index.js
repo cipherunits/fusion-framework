@@ -1014,8 +1014,7 @@ class FusionApp {
     this.settings = getSettings()
     this.engine = new NativeApp()
     this.mounted = false
-    // Default: advertise Fusion to clients / Wappalyzer-style detectors.
-    this._middleware = [frameworkHeaders()]
+    this._middleware = []
   }
 
   use(middleware) {

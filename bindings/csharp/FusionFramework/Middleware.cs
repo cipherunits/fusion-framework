@@ -186,7 +186,7 @@ public static class Middleware
     public static FusionMiddleware RequireRoles(params string[] roles) =>
         RequireRoles((IEnumerable<string>)roles);
 
-    /// <summary>Default identity middleware — advertises Fusion on every response.</summary>
+    /// <summary>Optional identity middleware — not enabled by default. Add via <c>app.Use(Middleware.FrameworkHeaders())</c>.</summary>
     public static FusionMiddleware FrameworkHeaders()
     {
         var extra = Header.Fingerprint();

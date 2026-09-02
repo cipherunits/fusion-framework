@@ -52,6 +52,20 @@ def test_bearer_jwt_populates_state():
         clear_active_global()
 
 
+def test_no_middleware_by_default():
+    """FusionApp does not inject framework headers unless explicitly added."""
+    clear_active_global()
+    set_active_global([])
+    try:
+        request = {"path": "/", "headers": {}, "method": "GET"}
+        result = dispatch_route(request, _handler, [])
+        assert result["status"] == 200
+        headers = {str(k).lower(): v for k, v in (result.get("headers") or {}).items()}
+        assert "x-powered-by" not in headers
+    finally:
+        clear_active_global()
+
+
 def test_framework_headers_awaits_async_handler():
     """Regression: sync framework_headers must not stringify coroutine bodies.
 

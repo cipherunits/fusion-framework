@@ -91,7 +91,7 @@ impl App {
         let fingerprint = self
             .settings
             .get_bool("fingerprint.enabled")
-            .unwrap_or(true);
+            .unwrap_or(false);
         if fingerprint {
             server::listen(self.router, addr).await
         } else {

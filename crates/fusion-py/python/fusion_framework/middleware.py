@@ -222,11 +222,11 @@ def _call_next_merge_headers(
 
 
 def framework_headers() -> Middleware:
-    """Default identity middleware: advertise Fusion on every response.
+    """Optional identity middleware: advertise Fusion on responses.
 
     Adds ``X-Powered-By``, ``X-Framework``, and ``X-Fusion-Version``.
-    The Rust core also injects these on the wire (covers 404s). Disable with
-    ``fingerprint.enabled: false`` in ``fusion.<env>.json``.
+    Not enabled by default — add with ``app.use(framework_headers())``.
+    Wire-level injection is off unless ``fingerprint.enabled: true`` in settings.
     """
     try:
         from fusion_framework._fusion import fingerprint_headers as _fp

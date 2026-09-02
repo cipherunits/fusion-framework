@@ -24,13 +24,13 @@ use crate::router::Router;
 /// Options for [`listen_with`].
 #[derive(Debug, Clone)]
 pub struct ListenOptions {
-    /// Add Fusion identity headers (`X-Powered-By`, …) on every response. Default: true.
+    /// Add Fusion identity headers (`X-Powered-By`, …) on every response. Default: false.
     pub fingerprint: bool,
 }
 
 impl Default for ListenOptions {
     fn default() -> Self {
-        Self { fingerprint: true }
+        Self { fingerprint: false }
     }
 }
 
