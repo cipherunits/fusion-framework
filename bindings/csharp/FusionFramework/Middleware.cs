@@ -186,7 +186,125 @@ public static class Middleware
     public static FusionMiddleware RequireRoles(params string[] roles) =>
         RequireRoles((IEnumerable<string>)roles);
 
-    /// <summary>Default identity middleware — advertises Fusion on every response.</summary>
+    /// <summary>Common security response headers.</summary>
+    public static FusionMiddleware SecurityHeaders(
+        string contentTypeOptions = "nosniff",
+        string frameOptions = "DENY",
+        string referrerPolicy = "strict-origin-when-cross-origin",
+        string permissionsPolicy = "camera=(), microphone=(), geolocation=(), payment=()",
+        string coop = "same-origin",
+        string corp = "same-origin",
+        string? csp = null,
+        string? hsts = null)
+    {
+        var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["X-Content-Type-Options"] = contentTypeOptions,
+            ["X-Frame-Options"] = frameOptions,
+            ["Referrer-Policy"] = referrerPolicy,
+            ["Permissions-Policy"] = permissionsPolicy,
+            ["Cross-Origin-Opener-Policy"] = coop,
+            ["Cross-Origin-Resource-Policy"] = corp,
+        };
+        if (!string.IsNullOrEmpty(csp)) extra["Content-Security-Policy"] = csp!;
+        if (!string.IsNullOrEmpty(hsts)) extra["Strict-Transport-Security"] = hsts!;
+
+        return (request, callNext) =>
+        {
+            var result = ResolveAwaitable(callNext(request));
+            return MergeResponseHeaders(result, extra);
+        };
+    }
+
+    /// <summary>Set <c>Cache-Control</c> on responses.</summary>
+    public static FusionMiddleware CacheHeaders(string defaultValue = "no-store") =>
+        (request, callNext) =>
+        {
+            var result = ResolveAwaitable(callNext(request));
+            return MergeResponseHeaders(result, new Dictionary<string, string>
+            {
+                ["Cache-Control"] = defaultValue,
+            });
+        };
+
+    /// <summary>Echo or generate <c>X-Request-Id</c> on each request.</summary>
+    public static FusionMiddleware RequestId(string header = "X-Request-Id", bool incoming = true) =>
+        (request, callNext) =>
+        {
+            string? rid = incoming ? GetHeader(request, header) : null;
+            if (string.IsNullOrEmpty(rid))
+                rid = Guid.NewGuid().ToString();
+            EnsureState(request)["request_id"] = rid;
+            var result = ResolveAwaitable(callNext(request));
+            return MergeResponseHeaders(result, new Dictionary<string, string> { [header] = rid });
+        };
+
+    /// <summary>CORS middleware; answers <c>OPTIONS</c> preflight with 204.</summary>
+    public static FusionMiddleware Cors(
+        IEnumerable<string>? allowOrigins = null,
+        IEnumerable<string>? allowMethods = null,
+        IEnumerable<string>? allowHeaders = null,
+        IEnumerable<string>? exposeHeaders = null,
+        bool allowCredentials = false,
+        int maxAge = 600)
+    {
+        var origins = (allowOrigins ?? new[] { "*" }).Select(o => o.ToString()).ToList();
+        var methods = (allowMethods ?? new[]
+        {
+            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD",
+        }).Select(m => m.ToUpperInvariant()).ToList();
+        var headers = (allowHeaders ?? new[]
+        {
+            "Authorization", "Content-Type", "Accept", "Origin", "X-Request-Id",
+        }).ToList();
+        var expose = (exposeHeaders ?? new[] { "X-Request-Id" }).ToList();
+        var allowAll = origins.Contains("*");
+
+        Dictionary<string, string> CorsHeaders(string? origin)
+        {
+            var chosen = "*";
+            if (!allowAll)
+            {
+                if (!string.IsNullOrEmpty(origin) && origins.Contains(origin))
+                    chosen = origin;
+                else if (origins.Count > 0)
+                    chosen = origins[0];
+            }
+
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Access-Control-Allow-Origin"] = chosen,
+                ["Access-Control-Allow-Methods"] = string.Join(", ", methods),
+                ["Access-Control-Allow-Headers"] = string.Join(", ", headers),
+                ["Access-Control-Expose-Headers"] = string.Join(", ", expose),
+                ["Access-Control-Max-Age"] = maxAge.ToString(),
+                ["Vary"] = "Origin",
+            };
+            if (allowCredentials && chosen != "*")
+                map["Access-Control-Allow-Credentials"] = "true";
+            return map;
+        }
+
+        return (request, callNext) =>
+        {
+            var origin = GetHeader(request, "Origin");
+            var extra = CorsHeaders(origin);
+            if (string.Equals(request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+            {
+                return new Dictionary<string, object?>
+                {
+                    ["status"] = 204,
+                    ["body"] = "",
+                    ["headers"] = extra,
+                };
+            }
+
+            var result = ResolveAwaitable(callNext(request));
+            return MergeResponseHeaders(result, extra);
+        };
+    }
+
+    /// <summary>Optional identity middleware — not enabled by default. Add via <c>app.Use(Middleware.FrameworkHeaders())</c>.</summary>
     public static FusionMiddleware FrameworkHeaders()
     {
         var extra = Header.Fingerprint();
@@ -227,6 +345,18 @@ public static class Middleware
             ["status"] = status,
             ["body"] = new Dictionary<string, object?> { ["detail"] = detail },
         };
+
+    static string? GetHeader(FusionRequest request, string name)
+    {
+        if (request.Headers.TryGetValue(name, out var direct) && !string.IsNullOrEmpty(direct))
+            return direct;
+        foreach (var kv in request.Headers)
+        {
+            if (string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase))
+                return kv.Value;
+        }
+        return null;
+    }
 
     static byte[] Base64UrlDecode(string input)
     {

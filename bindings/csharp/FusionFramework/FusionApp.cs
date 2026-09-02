@@ -20,8 +20,6 @@ public sealed class FusionApp : IDisposable
 
         settings ??= SettingsStore.Current;
         Native.fusion_app_set_settings(_app, settings.Handle);
-        // Default: advertise Fusion to clients / Wappalyzer-style detectors.
-        _middleware.Add(Middleware.FrameworkHeaders());
     }
 
     public FusionApp Use(FusionMiddleware middleware)

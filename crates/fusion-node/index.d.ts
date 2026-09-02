@@ -163,6 +163,33 @@ export type FusionMiddleware = (
 
 export function frameworkHeaders(): FusionMiddleware
 
+export function securityHeaders(options?: {
+  contentTypeOptions?: string
+  frameOptions?: string
+  referrerPolicy?: string
+  permissionsPolicy?: string
+  coop?: string
+  corp?: string
+  csp?: string
+  hsts?: string
+}): FusionMiddleware
+
+export function cors(options?: {
+  allowOrigins?: string | string[]
+  allowMethods?: string[]
+  allowHeaders?: string[]
+  exposeHeaders?: string[]
+  allowCredentials?: boolean
+  maxAge?: number
+}): FusionMiddleware
+
+export function cacheHeaders(options?: { default?: string; value?: string }): FusionMiddleware
+
+export function requestId(options?: {
+  header?: string
+  incoming?: boolean
+}): FusionMiddleware
+
 export type FusionResponse =
   | string
   | {
