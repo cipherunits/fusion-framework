@@ -224,6 +224,7 @@ internal static class SwaggerDocs
         foreach (var entry in Route.Snapshot())
         {
             if (!MatchesVersion(entry.Version, versionFilter)) continue;
+            if (typeof(FusionBaseTemplate).IsAssignableFrom(entry.ApiClass)) continue;
 
             foreach (var slot in entry.Slots)
             {

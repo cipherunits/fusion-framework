@@ -29,10 +29,14 @@ class FusionBaseTemplate(FusionBaseApi):
     HTML for browsers and returns ``context()`` as JSON when the client sends
     ``Accept: application/json`` or ``?format=json``.
 
+    Template routes are mounted as HTTP handlers but are excluded from Swagger/OpenAPI.
+
     Built-in UI components are defined in ``fusion/macros.html`` (Tera 2 components)::
 
         {{<fusion.button label="Save" variant="primary" />}}
     """
+
+    __fusion_template__ = True
 
     template: ClassVar[str] = ""
     template_address: ClassVar[str] = ""

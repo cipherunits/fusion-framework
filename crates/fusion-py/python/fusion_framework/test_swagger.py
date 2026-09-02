@@ -60,6 +60,30 @@ def test_route_versions_and_filtered_specs():
     assert "/health" in combined["paths"]
 
 
+def test_template_routes_excluded_from_openapi():
+    from fusion_framework.template import FusionBaseTemplate
+
+    @route("/pages/home")
+    class HomePage(FusionBaseTemplate):
+        template = "home/index.html"
+
+        def context(self):
+            return {"title": "Home"}
+
+    @route("/api/items", version="v1", tags=["items"])
+    class ItemsApi(FusionBaseApi):
+        def get(self):
+            return {"items": []}
+
+    spec = openapi_spec()
+    assert "/pages/home" not in spec["paths"]
+    assert "/api/items" not in spec["paths"]  # versioned
+
+    v1 = openapi_spec("v1")
+    assert "/pages/home" not in v1["paths"]
+    assert "/v1/api/items" in v1["paths"]
+
+
 def test_swagger_asset_urls():
     from fusion_framework.app import _swagger_asset_url, _SWAGGER_ASSETS
 
