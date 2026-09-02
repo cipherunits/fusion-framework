@@ -34,7 +34,7 @@ cargo test -p fusion-core naming
 cargo check -p fusion-py
 node --check crates/fusion-node/index.js
 dotnet build bindings/csharp/FusionFramework/FusionFramework.csproj
-python -m pytest crates/fusion-py/python/fusion_framework/test_http_route.py -q
+python -m pytest tests/python -q
 ```
 
 ## Style

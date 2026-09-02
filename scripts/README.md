@@ -155,7 +155,7 @@ Each script runs a small smoke check before it finishes. After install, you can 
 ```bash
 python -c "from fusion_framework import settings; print('python ok')"
 python examples/template_demo.py
-python -m pytest crates/fusion-py/python/fusion_framework/test_http_route.py -q
+python -m pytest tests/python -q
 ```
 
 **Node**

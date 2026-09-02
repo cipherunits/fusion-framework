@@ -8,14 +8,31 @@ description: >-
 
 # Testing & Verification
 
+## Full suite (recommended)
+
+```bash
+./tests/scripts/run-all.sh
+```
+
 ## Quick smoke (after route/API changes)
 
 ```bash
 cargo test -p fusion-core naming
 cargo check -p fusion-py
 node --check crates/fusion-node/index.js
-dotnet build bindings/csharp/FusionFramework/FusionFramework.csproj --no-restore 2>/dev/null || dotnet build bindings/csharp/FusionFramework/FusionFramework.csproj
-python -m pytest crates/fusion-py/python/fusion_framework/test_http_route.py -q
+dotnet build bindings/csharp/FusionFramework/FusionFramework.csproj
+./tests/scripts/run-python.sh -q
+```
+
+## Python (pytest)
+
+Tests live under `tests/python/` (not inside the installable package).
+
+```bash
+./scripts/dev-install-python.sh --venv .venv
+source .venv/bin/activate
+pytest                          # uses pytest.ini at repo root
+pytest tests/python/unit/test_http_route.py -q
 ```
 
 ## Full Rust workspace
@@ -29,14 +46,18 @@ cargo test --workspace
 
 | Binding | Command |
 |---------|---------|
-| Python package | `cd crates/fusion-py && maturin develop` (if building extension) |
+| Python | `pytest tests/python` (after `dev-install-python.sh`) |
 | Node | `node --check crates/fusion-node/index.js` |
 | C# | `dotnet build bindings/csharp/FusionFramework/FusionFramework.csproj` |
+
+## Layout
+
+See `tests/README.md` for folder structure and conventions.
 
 ## What to exclude from git
 
 - `bindings/csharp/**/bin/`, `obj/`
-- `target/`, `node_modules/`, `__pycache__/`
+- `target/`, `node_modules/`, `__pycache__/`, `.pytest_cache/`
 - Local `.pdb` changes from debug builds
 
 ## When tests fail

@@ -63,4 +63,4 @@ public class UserModule : FusionBaseApi {
 ## Tests
 
 - Rust: `cargo test -p fusion-core naming`
-- Python: `test_http_route.py`
+- Python: `pytest tests/python`
