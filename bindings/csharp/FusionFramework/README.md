@@ -54,6 +54,22 @@ foreach (var mw in MIDDLEWARE) app.Use(mw);
 app.Listen();
 ```
 
+### Auto-reload (development)
+
+```csharp
+// Restart the process when source files change
+app.Listen(reload: true);
+
+// Never reload (default) — same as omit / settings reload: false
+app.Listen(reload: false);
+```
+
+Or in `fusion.dev.json`:
+
+```json
+{ "reload": true }
+```
+
 ## Custom HTTP routes
 
 Use method-level attributes alongside convention `get`/`post`/… handlers:

@@ -97,6 +97,14 @@ impl Settings {
         self.get_bool("debug").unwrap_or(false)
     }
 
+    /// When true, host bindings should restart the process on source changes.
+    /// Default is ``false`` (no reload). Override with ``listen(reload=...)``.
+    pub fn reload(&self) -> bool {
+        self.get_bool("reload")
+            .or_else(|| self.get_bool("reload.enabled"))
+            .unwrap_or(false)
+    }
+
     /// Directory for Tera templates (``templates.dir`` in settings).
     pub fn templates_dir(&self) -> String {
         self.get_str("templates.dir")
@@ -376,6 +384,19 @@ mod tests {
             m
         });
         assert_eq!(settings.get_str("secret_key").as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn reload_defaults_false() {
+        let settings = Settings::new();
+        assert!(!settings.reload());
+        let mut settings = Settings::new();
+        settings.merge_map({
+            let mut m = Map::new();
+            m.insert("reload".into(), json!(true));
+            m
+        });
+        assert!(settings.reload());
     }
 
     fn tempfile_dir() -> PathBuf {

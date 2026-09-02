@@ -162,6 +162,12 @@ impl PySettings {
     }
 
     #[getter]
+    fn reload(&self) -> PyResult<bool> {
+        let _ = self.with_mut(|s| s.ensure_loaded(&[]).map(|_| ()))?;
+        self.with_ref(|s| s.reload())
+    }
+
+    #[getter]
     fn config(&self, py: Python<'_>) -> PyResult<PyObject> {
         let _ = self.with_mut(|s| s.ensure_loaded(&[]).map(|_| ()))?;
         let map = self.with_ref(|s| JsonValue::Object(s.config().clone()))?;

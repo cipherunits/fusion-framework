@@ -1,5 +1,6 @@
 const path = require('path')
 const fs = require('fs')
+const { spawn } = require('child_process')
 const { platform, arch } = process
 
 function napiTriple() {
@@ -1077,15 +1078,197 @@ class FusionApp {
     this.mounted = true
   }
 
-  async listen(host, port) {
-    this.mount()
+  async listen(host, port, options = {}) {
+    const reloadOpt =
+      options && Object.prototype.hasOwnProperty.call(options, 'reload')
+        ? options.reload
+        : host && typeof host === 'object'
+          ? host.reload
+          : undefined
+    // Support listen({ host, port, reload }) as well as listen(host, port, { reload })
+    let h = host
+    let p = port
+    let reloadArg = reloadOpt
+    let watchDirs = options?.watchDirs
+    if (host && typeof host === 'object' && !Array.isArray(host)) {
+      h = host.host
+      p = host.port
+      reloadArg = host.reload
+      watchDirs = host.watchDirs
+    }
+
     const snapshot = getSettings()
-    const h = host ?? snapshot.host
-    const p = port ?? snapshot.port
-    if (snapshot.debug) {
-      console.log(`fusion listening on http://${h}:${p}`)
+    const settingsReload = Boolean(snapshot.get('reload', false))
+    const shouldReload =
+      reloadArg === undefined || reloadArg === null ? settingsReload : Boolean(reloadArg)
+
+    if (shouldReload && process.env.FUSION_RELOAD_CHILD !== '1') {
+      await runWithReloader({ watchDirs })
+      return
+    }
+
+    this.mount()
+    h = h ?? snapshot.host
+    p = p ?? snapshot.port
+    if (snapshot.debug || shouldReload) {
+      const mode = shouldReload ? ' (reload)' : ''
+      console.log(`fusion listening on http://${h}:${p}${mode}`)
     }
     await this.engine.listen(h, Number(p))
+  }
+}
+
+const RELOAD_SKIP_DIRS = new Set([
+  '.git',
+  '.hg',
+  'node_modules',
+  'target',
+  '.venv',
+  'venv',
+  '__pycache__',
+  'bin',
+  'obj',
+  'dist',
+  'build',
+])
+
+const RELOAD_EXTENSIONS = new Set([
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.ts',
+  '.json',
+  '.html',
+  '.tera',
+  '.py',
+  '.cs',
+])
+
+function collectWatchedFiles(roots) {
+  const files = []
+  const walk = (dir) => {
+    let entries
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (entry.name.startsWith('.') && entry.name !== '.') continue
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        if (RELOAD_SKIP_DIRS.has(entry.name)) continue
+        walk(full)
+      } else if (RELOAD_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+        files.push(full)
+      }
+    }
+  }
+  for (const root of roots) {
+    const resolved = path.resolve(root)
+    try {
+      const st = fs.statSync(resolved)
+      if (st.isFile()) files.push(resolved)
+      else if (st.isDirectory()) walk(resolved)
+    } catch {
+      /* missing root */
+    }
+  }
+  return files
+}
+
+function snapshotMtimes(files) {
+  const map = new Map()
+  for (const file of files) {
+    try {
+      map.set(file, fs.statSync(file).mtimeMs)
+    } catch {
+      /* ignore */
+    }
+  }
+  return map
+}
+
+async function runWithReloader({ watchDirs } = {}) {
+  const roots = watchDirs?.length ? watchDirs : [process.cwd()]
+  console.log(`fusion: reload enabled (watching ${roots.join(', ')})`)
+
+  let child = null
+  const spawnChild = () => {
+    const env = { ...process.env, FUSION_RELOAD_CHILD: '1' }
+    child = spawn(process.execPath, process.argv.slice(1), {
+      env,
+      stdio: 'inherit',
+    })
+    return child
+  }
+
+  const stopChild = () =>
+    new Promise((resolve) => {
+      if (!child || child.exitCode !== null) {
+        child = null
+        resolve()
+        return
+      }
+      child.once('exit', () => {
+        child = null
+        resolve()
+      })
+      child.kill('SIGTERM')
+      setTimeout(() => {
+        if (child) child.kill('SIGKILL')
+      }, 5000)
+    })
+
+  const shutdown = async () => {
+    await stopChild()
+    process.exit(0)
+  }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+
+  let mtimes = snapshotMtimes(collectWatchedFiles(roots))
+  spawnChild()
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    await new Promise((r) => setTimeout(r, 500))
+    if (child && child.exitCode !== null) {
+      console.log(`fusion: child exited (${child.exitCode}); restarting…`)
+      await new Promise((r) => setTimeout(r, 300))
+      spawnChild()
+      mtimes = snapshotMtimes(collectWatchedFiles(roots))
+      continue
+    }
+    const files = collectWatchedFiles(roots)
+    const next = snapshotMtimes(files)
+    let changed = null
+    for (const [file, mtime] of next) {
+      const prev = mtimes.get(file)
+      if (prev === undefined || mtime > prev) {
+        changed = file
+        break
+      }
+    }
+    if (!changed) {
+      for (const file of mtimes.keys()) {
+        if (!next.has(file)) {
+          changed = file
+          break
+        }
+      }
+    }
+    if (!changed) continue
+    let label = changed
+    try {
+      label = path.relative(process.cwd(), changed) || changed
+    } catch {
+      /* keep absolute */
+    }
+    console.log(`fusion: change detected (${label}); reloading…`)
+    await stopChild()
+    spawnChild()
+    mtimes = snapshotMtimes(collectWatchedFiles(roots))
   }
 }
 
@@ -1105,7 +1288,12 @@ async function run(options = {}) {
   }
   const app = new FusionApp()
   for (const mw of middleware) app.use(mw)
-  await app.listen()
+  await app.listen({
+    reload: options && Object.prototype.hasOwnProperty.call(options, 'reload')
+      ? options.reload
+      : undefined,
+    watchDirs: options?.watchDirs,
+  })
   return app
 }
 

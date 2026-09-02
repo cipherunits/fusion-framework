@@ -14,7 +14,10 @@ def main() -> None:
     app = FusionApp(get_settings())
     for middleware in MIDDLEWARE:
         app.use(middleware)
-    app.listen()
+    # Default: no reload. For development auto-restart on file changes:
+    #   app.listen(reload=True)
+    # Or set "reload": true in fusion.dev.json
+    app.listen(reload=False)
 
 
 if __name__ == "__main__":

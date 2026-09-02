@@ -372,7 +372,35 @@ class FusionApp:
         """Register global middleware: ``(request, call_next) -> response``."""
         self._middleware.append(middleware)
 
-    def listen(self, host: str | None = None, port: int | None = None) -> None:
+    def listen(
+        self,
+        host: str | None = None,
+        port: int | None = None,
+        *,
+        reload: bool | None = None,
+        watch_dirs: list[str] | None = None,
+    ) -> None:
+        """Start the HTTP server.
+
+        ``reload`` controls auto-restart on source changes:
+
+        - ``True`` — watch files and restart when anything changes
+        - ``False`` — never reload, even if files change
+        - ``None`` — use ``settings.reload`` / ``reload`` in ``fusion.<env>.json``
+          (default ``false``)
+
+        When reload is enabled, the parent process watches files and restarts a
+        child that actually listens. Pass ``watch_dirs`` to limit what is scanned.
+        """
+        from fusion_framework.reload import is_reload_child, resolve_reload, run_with_reloader
+
+        settings_reload = bool(self.settings.get("reload", default=False))
+        should_reload = resolve_reload(reload, settings_reload=settings_reload)
+
+        if should_reload and not is_reload_child():
+            run_with_reloader(watch_dirs=watch_dirs)
+            return
+
         if not self._mounted:
             set_active_global(self._middleware)
             self._engine.mount_routes()
@@ -382,15 +410,21 @@ class FusionApp:
             self._mounted = True
         host = host if host is not None else self.settings.host
         port = port if port is not None else self.settings.port
-        if self.settings.debug:
-            print(f"fusion listening on http://{host}:{port}", flush=True)
+        if self.settings.debug or should_reload:
+            mode = " (reload)" if should_reload else ""
+            print(f"fusion listening on http://{host}:{port}{mode}", flush=True)
         try:
             self._engine.listen(host, int(port))
         except KeyboardInterrupt:
             print("fusion: stopped", flush=True)
 
 
-def run(settings_module: str | None = "settings", middleware: list | None = None) -> None:
+def run(
+    settings_module: str | None = "settings",
+    middleware: list | None = None,
+    *,
+    reload: bool | None = None,
+) -> None:
     """Start the app. For middleware, prefer explicit ``FusionApp`` in ``main.py``."""
     if settings_module:
         load_settings_module(settings_module)
@@ -399,4 +433,4 @@ def run(settings_module: str | None = "settings", middleware: list | None = None
     app = FusionApp(get_settings())
     for mw in middleware or []:
         app.use(mw)
-    app.listen()
+    app.listen(reload=reload)
