@@ -219,6 +219,22 @@ internal static class SwaggerDocs
         return spec;
     }
 
+    internal static JsonObject CreateTestSpec(string? version = null)
+    {
+        var swagger = new SwaggerConfig
+        {
+            Path = "/swagger",
+            PageTitle = "Fusion API Docs",
+            Info = new JsonObject
+            {
+                ["title"] = "fusion-framework",
+                ["version"] = "1.0.0",
+            },
+            Ui = new JsonObject(),
+        };
+        return BuildOpenApi(swagger, version);
+    }
+
     static void FillPaths(JsonObject paths, string? versionFilter)
     {
         foreach (var entry in Route.Snapshot())

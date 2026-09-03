@@ -137,6 +137,7 @@ jobs:
         shell: bash
         run: |
           node -e "const f=require('./index.js'); if(!f.FusionApp||!f.status) throw new Error('smoke failed'); console.log('ok', f.status.HTTP_SUCCESS)"
+          node --test ../../tests/node/unit/*.test.js
 
   csharp:
     name: C# package
@@ -152,3 +153,5 @@ jobs:
         run: cargo build -p fusion-ffi --release
       - name: Build FusionFramework
         run: dotnet build -c Release bindings/csharp/FusionFramework/FusionFramework.csproj
+      - name: Test C# bindings
+        run: dotnet test tests/csharp/FusionFramework.Tests/FusionFramework.Tests.csproj -c Release

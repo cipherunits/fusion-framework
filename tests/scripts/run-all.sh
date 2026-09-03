@@ -11,9 +11,16 @@ cargo test -p fusion-core
 echo "==> Node syntax"
 node --check crates/fusion-node/index.js
 
-echo "==> C# build"
-dotnet build bindings/csharp/FusionFramework/FusionFramework.csproj --no-restore 2>/dev/null \
-  || dotnet build bindings/csharp/FusionFramework/FusionFramework.csproj
+echo "==> Node unit tests"
+if ls crates/fusion-node/*.node >/dev/null 2>&1; then
+  ./tests/scripts/run-node.sh
+else
+  echo "    skip: build addon with (cd crates/fusion-node && npm run build:debug)"
+fi
+
+echo "==> C# tests"
+cargo build -p fusion-ffi --release -q
+./tests/scripts/run-csharp.sh -q
 
 echo "==> Python (pytest)"
 if ! python3 -c "import fusion_framework" 2>/dev/null; then
