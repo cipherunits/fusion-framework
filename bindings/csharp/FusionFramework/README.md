@@ -117,6 +117,17 @@ MIDDLEWARE.Add(Middleware.BearerJwt());
 Route.Register(typeof(AdminModule), "/api/admin", permissions: new[] { AdminChecks.IsAdmin });
 ```
 
+## Static files
+
+Serve CSS/images without custom routes (WhiteNoise-style):
+
+```csharp
+app.Use(Middleware.StaticFiles(root: "static", prefix: "/static"));
+// <img src="/static/logo.png">
+```
+
+Use `prefix: "/"` with `fallthrough: true` when assets share the site root with HTML routes.
+
 ## License
 
 BSD 3-Clause

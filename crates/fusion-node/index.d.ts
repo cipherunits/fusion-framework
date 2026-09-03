@@ -201,6 +201,14 @@ export function requestId(options?: {
   incoming?: boolean
 }): FusionMiddleware
 
+/** Serve files from `root` under URL `prefix` (WhiteNoise-style). */
+export function staticFiles(options?: {
+  root?: string
+  prefix?: string
+  maxAge?: number | null
+  fallthrough?: boolean
+}): FusionMiddleware
+
 export type FusionResponse =
   | string
   | {

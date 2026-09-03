@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import inspect
 import json
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, Union
 
 Middleware = Callable[..., Any]
@@ -394,6 +395,91 @@ def cors(
         if str(request.get("method", "GET")).upper() == "OPTIONS":
             return {"status": 204, "body": "", "headers": extra}
         return _call_next_merge_headers(call_next, request, extra)
+
+    return middleware
+
+
+_STATIC_MIME_TYPES: dict[str, str] = {
+    ".css": "text/css; charset=utf-8",
+    ".gif": "image/gif",
+    ".htm": "text/html; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".ico": "image/x-icon",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json",
+    ".map": "application/json",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain; charset=utf-8",
+    ".webp": "image/webp",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+}
+
+
+def _guess_static_content_type(path: Path) -> str:
+    """Map a file extension to a Content-Type, defaulting to octet-stream."""
+    return _STATIC_MIME_TYPES.get(path.suffix.lower(), "application/octet-stream")
+
+
+def static_files(
+    root: str | Path = "static",
+    *,
+    prefix: str = "/static",
+    max_age: int | None = 3600,
+    fallthrough: bool | None = None,
+) -> Middleware:
+    """Serve local files under ``root`` for URLs starting with ``prefix`` (WhiteNoise-style).
+
+    Only ``GET`` / ``HEAD``. Rejects path traversal. Paths outside ``prefix`` call
+    the next middleware. Missing files under ``prefix`` return 404 unless
+    ``fallthrough`` is True (defaults to True when ``prefix`` is ``/`` so HTML
+    routes still work).
+    """
+    root_path = Path(root)
+    normalized = "/" + str(prefix).strip("/") if str(prefix).strip("/") else "/"
+    allow_fallthrough = (normalized == "/") if fallthrough is None else bool(fallthrough)
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        method = str(request.get("method", "GET")).upper()
+        if method not in ("GET", "HEAD"):
+            return call_next(request)
+
+        req_path = str(request.get("path") or "/")
+        if normalized == "/":
+            relative = req_path.lstrip("/")
+            if not relative or relative.endswith("/"):
+                return call_next(request)
+        else:
+            if not (req_path == normalized or req_path.startswith(normalized + "/")):
+                return call_next(request)
+            relative = req_path[len(normalized) :].lstrip("/")
+            if not relative:
+                return call_next(request)
+
+        base = root_path.resolve()
+        candidate = (base / relative).resolve()
+        try:
+            candidate.relative_to(base)
+        except ValueError:
+            return {"status": 403, "body": {"detail": "Forbidden"}}
+
+        if not candidate.is_file():
+            if allow_fallthrough:
+                return call_next(request)
+            return {"status": 404, "body": {"detail": "Not found"}}
+
+        size = candidate.stat().st_size
+        headers = {
+            "content-type": _guess_static_content_type(candidate),
+            "content-length": str(size),
+        }
+        if max_age is not None:
+            headers["cache-control"] = f"public, max-age={int(max_age)}"
+        body: Any = b"" if method == "HEAD" else candidate.read_bytes()
+        return {"status": 200, "body": body, "headers": headers}
 
     return middleware
 

@@ -268,6 +268,83 @@ function cors(options = {}) {
   }
 }
 
+const STATIC_MIME_TYPES = {
+  '.css': 'text/css; charset=utf-8',
+  '.gif': 'image/gif',
+  '.htm': 'text/html; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json',
+  '.map': 'application/json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.txt': 'text/plain; charset=utf-8',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+}
+
+/** Guess Content-Type from a file path extension. */
+function guessStaticContentType(filePath) {
+  const ext = path.extname(String(filePath)).toLowerCase()
+  return STATIC_MIME_TYPES[ext] || 'application/octet-stream'
+}
+
+/**
+ * Serve files from `root` for URLs under `prefix` (WhiteNoise-style).
+ * Only GET/HEAD; path traversal is rejected. Missing files 404 unless fallthrough.
+ */
+function staticFiles(options = {}) {
+  const rootDir = path.resolve(String(options.root ?? 'static'))
+  const rawPrefix = String(options.prefix ?? '/static').trim()
+  const normalized = rawPrefix.replace(/\/+$/, '') === '' ? '/' : `/${rawPrefix.replace(/^\/+|\/+$/g, '')}`
+  const maxAge = options.maxAge === undefined ? 3600 : options.maxAge
+  const allowFallthrough =
+    options.fallthrough === undefined ? normalized === '/' : !!options.fallthrough
+
+  return (request, callNext) => {
+    const method = String(request.method || 'GET').toUpperCase()
+    if (method !== 'GET' && method !== 'HEAD') return callNext(request)
+
+    const reqPath = String(request.path || '/')
+    let relative = ''
+    if (normalized === '/') {
+      relative = reqPath.replace(/^\/+/, '')
+      if (!relative || relative.endsWith('/')) return callNext(request)
+    } else {
+      if (!(reqPath === normalized || reqPath.startsWith(`${normalized}/`))) {
+        return callNext(request)
+      }
+      relative = reqPath.slice(normalized.length).replace(/^\/+/, '')
+      if (!relative) return callNext(request)
+    }
+
+    const candidate = path.resolve(rootDir, relative)
+    const relToRoot = path.relative(rootDir, candidate)
+    if (relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
+      return { status: 403, body: { detail: 'Forbidden' } }
+    }
+    if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) {
+      if (allowFallthrough) return callNext(request)
+      return { status: 404, body: { detail: 'Not found' } }
+    }
+
+    const size = fs.statSync(candidate).size
+    const headers = {
+      'content-type': guessStaticContentType(candidate),
+      'content-length': String(size),
+    }
+    if (maxAge !== null && maxAge !== undefined) {
+      headers['cache-control'] = `public, max-age=${Number(maxAge)}`
+    }
+    const body = method === 'HEAD' ? Buffer.alloc(0) : fs.readFileSync(candidate)
+    return { status: 200, body, headers }
+  }
+}
+
 class FusionBaseApi {
   constructor(request) {
     this.request = request && typeof request === 'object' ? request : emptyRequest()
@@ -1527,6 +1604,7 @@ module.exports = {
   cors,
   cacheHeaders,
   requestId,
+  staticFiles,
   runMiddlewareChain,
   coerceParam,
   parsePagination,

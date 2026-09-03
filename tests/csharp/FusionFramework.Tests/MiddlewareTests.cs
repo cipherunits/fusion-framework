@@ -73,4 +73,37 @@ public class MiddlewareTests
         var headers = Assert.IsType<Dictionary<string, string>>(result["headers"]);
         Assert.False(string.IsNullOrEmpty(headers["Access-Control-Allow-Origin"]));
     }
+
+    [Fact]
+    public void StaticFiles_serves_asset_under_prefix()
+    {
+        var dir = Directory.CreateTempSubdirectory("fusion-static-");
+        try
+        {
+            var file = Path.Combine(dir.FullName, "logo.png");
+            File.WriteAllBytes(file, new byte[] { 0x89, 0x50, 0x4e, 0x47 });
+
+            var request = new FusionRequest
+            {
+                Method = "GET",
+                Path = "/static/logo.png",
+                Headers = new Dictionary<string, string>(),
+            };
+
+            var result = Middleware.RunChain(
+                request,
+                new[] { Middleware.StaticFiles(root: dir.FullName, prefix: "/static", maxAge: 60) },
+                Handler) as Dictionary<string, object?>;
+
+            Assert.NotNull(result);
+            Assert.Equal(200, result["status"]);
+            Assert.IsType<byte[]>(result["body"]);
+            var headers = Assert.IsType<Dictionary<string, string>>(result["headers"]);
+            Assert.Equal("image/png", headers["content-type"]);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }
