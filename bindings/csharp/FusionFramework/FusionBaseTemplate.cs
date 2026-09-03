@@ -10,13 +10,36 @@ public abstract class FusionBaseTemplate : FusionBaseApi
     public static string TemplateAddress { get; set; } = "";
     public static string TemplatesDir { get; set; } = "";
 
+    /// <summary>Sync template variables (override in subclasses).</summary>
     public virtual Dictionary<string, JsonNode?> Context() => new();
 
+    /// <summary>Async template variables; default wraps <see cref="Context"/>.</summary>
+    public virtual Task<Dictionary<string, JsonNode?>> ContextAsync() =>
+        Task.FromResult(Context());
+
+    /// <summary>
+    /// Default GET — HTML or JSON context. Uses <see cref="ContextAsync"/> so
+    /// subclasses can override that for DB/API-backed pages (Python async context parity).
+    /// </summary>
     public virtual object Get()
     {
+        var task = ContextAsync();
+        if (task.IsCompletedSuccessfully)
+            return FinishGet(task.Result);
+        return FinishGetAsync(task);
+    }
+
+    async Task<object> FinishGetAsync(Task<Dictionary<string, JsonNode?>> task)
+    {
+        var ctx = await task.ConfigureAwait(false);
+        return FinishGet(ctx);
+    }
+
+    object FinishGet(Dictionary<string, JsonNode?> ctx)
+    {
         if (WantsJson())
-            return Context();
-        return Render();
+            return ctx;
+        return HtmlResponse(ctx);
     }
 
     public virtual string TemplateName()
@@ -41,12 +64,42 @@ public abstract class FusionBaseTemplate : FusionBaseApi
         IDictionary<string, JsonNode?>? context = null,
         string? templateName = null)
     {
-        var ctx = new Dictionary<string, JsonNode?>(Context(), StringComparer.Ordinal);
+        var task = ContextAsync();
+        if (!task.IsCompletedSuccessfully)
+            return RenderAsync(task, status, headers, context, templateName);
+
+        var ctx = new Dictionary<string, JsonNode?>(task.Result, StringComparer.Ordinal);
         if (context != null)
         {
             foreach (var kv in context)
                 ctx[kv.Key] = kv.Value;
         }
+        return HtmlResponse(ctx, status, headers, templateName);
+    }
+
+    async Task<object> RenderAsync(
+        Task<Dictionary<string, JsonNode?>> task,
+        int status,
+        IDictionary<string, string>? headers,
+        IDictionary<string, JsonNode?>? context,
+        string? templateName)
+    {
+        var ctx = new Dictionary<string, JsonNode?>(await task.ConfigureAwait(false), StringComparer.Ordinal);
+        if (context != null)
+        {
+            foreach (var kv in context)
+                ctx[kv.Key] = kv.Value;
+        }
+        return HtmlResponse(ctx, status, headers, templateName);
+    }
+
+    /// <summary>Render an already-resolved context dictionary to an HTML envelope.</summary>
+    protected object HtmlResponse(
+        IDictionary<string, JsonNode?> ctx,
+        int status = 200,
+        IDictionary<string, string>? headers = null,
+        string? templateName = null)
+    {
         var html = Templates.Render(
             templateName ?? TemplateName(),
             ctx,
