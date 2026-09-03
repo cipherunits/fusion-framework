@@ -34,8 +34,9 @@ export class FusionBaseTemplate extends FusionBaseApi {
   static template: string
   static templateAddress: string
   static templatesDir: string
-  context(): Record<string, unknown>
-  get(): FusionResponse
+  /** Sync object or Promise (async context). */
+  context(): Record<string, unknown> | Promise<Record<string, unknown>>
+  get(): FusionResponse | Promise<FusionResponse>
   templateName(): string
   templatesRoot(): string
   render(options?: {
@@ -43,7 +44,7 @@ export class FusionBaseTemplate extends FusionBaseApi {
     headers?: Record<string, string>
     context?: Record<string, unknown>
     templateName?: string
-  }): FusionResponse
+  }): FusionResponse | Promise<FusionResponse>
 }
 
 export function renderTemplate(

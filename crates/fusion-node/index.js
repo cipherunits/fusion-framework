@@ -372,13 +372,28 @@ class FusionBaseTemplate extends FusionBaseApi {
   static templateAddress = ''
   static templatesDir = ''
 
+  /** Template variables; may return a Promise (async context). */
   context() {
     return {}
   }
 
   get() {
-    if (this.wantsJson()) return this.context()
-    return this.render()
+    const raw = this.context()
+    if (raw && typeof raw.then === 'function') {
+      return this._getAsync(raw)
+    }
+    return this._finishGet(raw)
+  }
+
+  async _getAsync(raw) {
+    const ctx = await raw
+    return this._finishGet(ctx)
+  }
+
+  _finishGet(ctx) {
+    const data = { ...(ctx || {}) }
+    if (this.wantsJson()) return data
+    return this._htmlResponse(data)
   }
 
   templateName() {
@@ -400,7 +415,21 @@ class FusionBaseTemplate extends FusionBaseApi {
     context = null,
     templateName = null,
   } = {}) {
-    const ctx = { ...this.context(), ...(context || {}) }
+    const raw = this.context()
+    if (raw && typeof raw.then === 'function') {
+      return this._renderAsync(raw, { status, headers, context, templateName })
+    }
+    const ctx = { ...(raw || {}), ...(context || {}) }
+    return this._htmlResponse(ctx, { status, headers, templateName })
+  }
+
+  async _renderAsync(raw, { status = 200, headers = {}, context = null, templateName = null } = {}) {
+    const base = await raw
+    const ctx = { ...(base || {}), ...(context || {}) }
+    return this._htmlResponse(ctx, { status, headers, templateName })
+  }
+
+  _htmlResponse(ctx, { status = 200, headers = {}, templateName = null } = {}) {
     const html = renderTemplate(
       templateName || this.templateName(),
       ctx,

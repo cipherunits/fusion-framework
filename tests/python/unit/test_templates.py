@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 from pathlib import Path
 
 import pytest
@@ -76,6 +78,45 @@ def test_template_get_returns_json_with_format_query():
         }
     )
     assert page.get() == {"name": "Fusion"}
+
+
+def test_async_context_renders_html(tmp_path: Path):
+    """async def context() is awaited by get()/render()."""
+
+    class Page(FusionBaseTemplate):
+        template = "hello.html"
+
+        async def context(self):
+            return {"name": "AsyncFusion"}
+
+    (tmp_path / "hello.html").write_text("<p>Hello {{ name }}!</p>", encoding="utf-8")
+    page = Page({"method": "GET", "path": "/"})
+    page.templates_dir = str(tmp_path)
+
+    out = page.get()
+    assert inspect.isawaitable(out)
+    resolved = asyncio.run(out)
+    assert resolved["status"] == 200
+    assert "Hello AsyncFusion!" in resolved["body"]
+
+
+def test_async_context_json_accept():
+    class Page(FusionBaseTemplate):
+        template = "hello.html"
+
+        async def context(self):
+            return {"title": "from-db"}
+
+    page = Page(
+        {
+            "method": "GET",
+            "path": "/",
+            "headers": {"accept": "application/json"},
+        }
+    )
+    out = page.get()
+    assert inspect.isawaitable(out)
+    assert asyncio.run(out) == {"title": "from-db"}
 
 
 def test_template_get_returns_html_for_browser_accept(tmp_path: Path):
