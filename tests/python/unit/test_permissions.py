@@ -2,22 +2,12 @@
 
 from fusion_framework._fusion import openapi_spec
 from fusion_framework.api import FusionBaseApi
-from fusion_framework.middleware import clear_active_global, dispatch_route, require_permissions
-from fusion_framework.route import clear_registry, route
+from fusion_framework.middleware import dispatch_route, require_permissions
+from fusion_framework.route import route
 
 
 def _handler(request):
     return {"status": 200, "body": {"ok": True}}
-
-
-def setup_function():
-    clear_registry()
-    clear_active_global()
-
-
-def teardown_function():
-    clear_registry()
-    clear_active_global()
 
 
 def test_require_permissions_blocks():

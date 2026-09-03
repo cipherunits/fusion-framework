@@ -44,10 +44,10 @@ jobs:
         run: python -m pip install ruff
 
       - name: ruff check
-        run: ruff check crates/fusion-py/python
+        run: ruff check crates/fusion-py/python tests/python
 
       - name: ruff format
-        run: ruff format --check crates/fusion-py/python
+        run: ruff format --check crates/fusion-py/python tests/python
 
       # Node binding is a thin CommonJS wrapper over N-API; no eslint config in this repo.
       - uses: actions/setup-node@v4
@@ -100,7 +100,9 @@ jobs:
         shell: bash
         run: |
           pip install dist/*.whl
+          pip install pytest
           python -c "from fusion_framework.api import FusionBaseApi; from fusion_framework.route import router; from fusion_framework import settings; print('ok')"
+          pytest tests/python -q
 
   node:
     name: Node addon (${{ matrix.settings.target }})
@@ -135,6 +137,7 @@ jobs:
         shell: bash
         run: |
           node -e "const f=require('./index.js'); if(!f.FusionApp||!f.status) throw new Error('smoke failed'); console.log('ok', f.status.HTTP_SUCCESS)"
+          node --test ../../tests/node/unit/*.test.js
 
   csharp:
     name: C# package
@@ -150,3 +153,5 @@ jobs:
         run: cargo build -p fusion-ffi --release
       - name: Build FusionFramework
         run: dotnet build -c Release bindings/csharp/FusionFramework/FusionFramework.csproj
+      - name: Test C# bindings
+        run: dotnet test tests/csharp/FusionFramework.Tests/FusionFramework.Tests.csproj -c Release

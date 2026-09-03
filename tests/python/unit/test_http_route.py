@@ -1,17 +1,9 @@
 """Tests for custom HTTP method routes (@http_get / HttpGet)."""
 
-from fusion_framework._fusion import clear_routes
+from fusion_framework._fusion import openapi_spec
 from fusion_framework.api import FusionBaseApi
 from fusion_framework.http_route import http_get
 from fusion_framework.route import route
-
-
-def setup_function():
-    clear_routes()
-
-
-def teardown_function():
-    clear_routes()
 
 
 def test_custom_http_get_with_action_token():
@@ -20,8 +12,6 @@ def test_custom_http_get_with_action_token():
         @http_get("test/[action]")
         def UserAction(self):
             return {"ok": True}
-
-    from fusion_framework._fusion import openapi_spec
 
     spec = openapi_spec()
     assert "/api/user/test/user" in spec["paths"]
@@ -38,8 +28,6 @@ def test_convention_and_custom_routes_coexist():
         @http_get("catalog/[action]")
         def ListAction(self):
             return {"mode": "custom"}
-
-    from fusion_framework._fusion import openapi_spec
 
     spec = openapi_spec()
     assert "/api/product" in spec["paths"]
@@ -60,8 +48,6 @@ def test_custom_http_inherits_class_tags():
         @http_get("admin/[action]", tags=["admin"])
         def AdminAction(self):
             return {"ok": True}
-
-    from fusion_framework._fusion import openapi_spec
 
     spec = openapi_spec()
     convention = spec["paths"]["/api/product"]["get"]

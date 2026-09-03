@@ -1,0 +1,53 @@
+---
+description: Core Fusion Framework engineering rules — parity, comments, tests, git, docs
+alwaysApply: true
+---
+
+# Fusion engineering (always)
+
+## Cross-binding parity
+
+When the user asks to add or change a framework feature (routes, middleware, permissions, Swagger, settings, etc.), implement it in **all three** bindings in the same change set unless they explicitly limit scope:
+
+- Python (`crates/fusion-py/`)
+- Node (`crates/fusion-node/`)
+- C# (`bindings/csharp/FusionFramework/`)
+
+Shared semantics belong in `crates/fusion-core/` first. Follow the `fusion-bindings-parity` skill.
+
+## Examples (every new public feature)
+
+Whenever a **new** user-facing feature or API is added (middleware, route options, permissions, pagination helpers, settings keys, etc.), add **usage examples in all three languages** under `examples/` so the shape is visible side by side:
+
+- Python: `examples/<feature>.py`
+- Node: `examples/<feature>.mjs`
+- C#: `examples/<feature>.cs` (or a small folder if a project is required)
+
+Match existing naming (`custom_http_routes.py` / `.mjs` / `.cs`, `pagination.py` / `.mjs` / `.cs`). Extend an existing trio when the feature fits; otherwise create a new trio. Do not ship Python-only demos for cross-binding APIs.
+
+## Comments
+
+- Every **new or meaningfully changed** function/method must have a short comment or docstring stating what it does.
+- When logic is dense, non-obvious, or branched, add inline comments that explain **why**, not just what the syntax does.
+
+## Tests
+
+- Prefer adding or updating tests for new behavior under `tests/` (Python / Node / C#) or `#[cfg(test)]` in Rust.
+- If a test fails: **investigate**, report the root cause clearly, then fix. Do not ignore or skip without explaining why.
+
+## Git staging
+
+- **Never** run `git add .` or `git add -A` / `git add --all`.
+- Stage files **one path at a time** (`git add path/to/file`).
+
+## Documentation & skills
+
+When you add a user-facing or agent-facing concept (new CLI-related behavior, new API surface, new test layout, new workflow):
+
+- Update the relevant skill under `.agents/skills/` and/or `.agents/README.md`.
+- Add a new skill if no existing one covers it.
+- Keep framework docs/examples aligned when public API changes.
+
+## Related skills
+
+Read when relevant: `fusion-architecture`, `fusion-bindings-parity`, `fusion-http-routes`, `fusion-testing`, `fusion-cli`, `fusion-coding-standards`, `fusion-release`.

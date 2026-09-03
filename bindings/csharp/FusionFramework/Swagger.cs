@@ -239,6 +239,24 @@ internal static class SwaggerDocs
         return spec;
     }
 
+    /// <summary>Build a minimal OpenAPI document for unit tests without a live Swagger config.</summary>
+    internal static JsonObject CreateTestSpec(string? version = null)
+    {
+        var swagger = new SwaggerConfig
+        {
+            Path = "/swagger",
+            PageTitle = "Fusion API Docs",
+            Info = new JsonObject
+            {
+                ["title"] = "fusion-framework",
+                ["version"] = "1.0.0",
+            },
+            Ui = new JsonObject(),
+        };
+        return BuildOpenApi(swagger, version);
+    }
+
+    /// <summary>Fill OpenAPI path operations; returns true if any route requires permissions.</summary>
     static bool FillPaths(JsonObject paths, string? versionFilter)
     {
         const string permissionsScheme = "FusionPermissions";
