@@ -10,15 +10,7 @@ from fusion_framework.app import (
     _swagger_version_urls,
 )
 from fusion_framework.config import Settings
-from fusion_framework.route import clear_registry, route
-
-
-def setup_function():
-    clear_registry()
-
-
-def teardown_function():
-    clear_registry()
+from fusion_framework.route import route
 
 
 def test_route_versions_and_filtered_specs():

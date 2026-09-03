@@ -34,3 +34,5 @@ Updates (when present):
 - Keep all bindings on the **same version** for a release.
 - Do not commit `bin/`, `obj/`, or `.pdb` artifacts from local `dotnet build`.
 - Changelog/README updates only when the user requests documentation.
+- Stage release files **individually** (never `git add .`).
+- After a release that changes public APIs used by scaffolds, note whether fusion-tool’s `FUSION_FRAMEWORK_VERSION` / templates need a bump (see `fusion-cli`).

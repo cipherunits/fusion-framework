@@ -94,5 +94,5 @@ cat <<EOF
 Next steps:
   source .venv/bin/activate    # if you use the repo .venv
   python examples/template_demo.py
-  python -m pytest crates/fusion-py/python/fusion_framework/test_http_route.py -q
+  python3 -m pytest tests/python -q
 EOF

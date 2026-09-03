@@ -1,18 +1,10 @@
 """Pagination tests."""
 
-from fusion_framework._fusion import clear_routes
+from fusion_framework._fusion import openapi_spec
 from fusion_framework.api import FusionBaseApi
 from fusion_framework.http import HTTPException
 from fusion_framework.pagination import paginated_body, parse_pagination
 from fusion_framework.route import route
-
-
-def setup_function():
-    clear_routes()
-
-
-def teardown_function():
-    clear_routes()
 
 
 def test_parse_pagination_defaults():
@@ -53,8 +45,6 @@ def test_fusion_base_api_paginated_response():
         def get(self, page: int = 1, page_size: int = 10):
             items = list(range(1, 6))
             return self.paginated(items, total=25, page=page, page_size=page_size)
-
-    from fusion_framework._fusion import openapi_spec
 
     spec = openapi_spec()
     assert "/api/product" in spec["paths"]
