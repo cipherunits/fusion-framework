@@ -1,14 +1,12 @@
 """Serve images/CSS from disk with ``static_files`` (WhiteNoise-style).
 
-Place assets under ``static/`` (or any root) and mount the middleware::
+``root`` = folder on disk · ``prefix`` = URL prefix the browser requests.
 
-    app.use(static_files(root="static", prefix="/static"))
+    static_files(root="static", prefix="/static")
+    # static/logo.png  →  /static/logo.png
+    # <img src="/static/logo.png">
 
-Then HTML can use ``<img src="/static/logo.png">`` without a custom route.
-
-For files next to templates with root-relative URLs::
-
-    app.use(static_files(root="templates/home", prefix="/", fallthrough=True))
+Files are registered as real GET/HEAD routes when the app listens.
 """
 
 from pathlib import Path

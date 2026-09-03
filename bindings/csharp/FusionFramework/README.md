@@ -119,14 +119,21 @@ Route.Register(typeof(AdminModule), "/api/admin", permissions: new[] { AdminChec
 
 ## Static files
 
-Serve CSS/images without custom routes (WhiteNoise-style):
+Serve CSS/images without custom routes (WhiteNoise-style).
+
+- **root**: folder on disk (e.g. `static`)
+- **prefix**: URL prefix (e.g. `/static`)
+
+So `static/logo.png` is available at `/static/logo.png`:
 
 ```csharp
 app.Use(Middleware.StaticFiles(root: "static", prefix: "/static"));
 // <img src="/static/logo.png">
 ```
 
-Use `prefix: "/"` with `fallthrough: true` when assets share the site root with HTML routes.
+Use `prefix: "/"` when files should be served at the site root
+(`templates/home/a.png` → `/a.png`). Files are mounted as real routes on
+`FusionApp.Mount()` / `Listen()`.
 
 ## License
 

@@ -295,7 +295,11 @@ function guessStaticContentType(filePath) {
 
 /**
  * Serve files from `root` for URLs under `prefix` (WhiteNoise-style).
- * Only GET/HEAD; path traversal is rejected. Missing files 404 unless fallthrough.
+ *
+ * - root: folder on disk (e.g. 'static')
+ * - prefix: URL prefix (e.g. '/static' → static/logo.png at /static/logo.png)
+ *
+ * Files are also mounted as real GET/HEAD routes on FusionApp.mount()/listen().
  */
 function staticFiles(options = {}) {
   const rootDir = path.resolve(String(options.root ?? 'static'))
@@ -304,44 +308,79 @@ function staticFiles(options = {}) {
   const maxAge = options.maxAge === undefined ? 3600 : options.maxAge
   const allowFallthrough =
     options.fallthrough === undefined ? normalized === '/' : !!options.fallthrough
+  const cfg = { root: rootDir, prefix: normalized, maxAge, fallthrough: allowFallthrough }
 
-  return (request, callNext) => {
-    const method = String(request.method || 'GET').toUpperCase()
-    if (method !== 'GET' && method !== 'HEAD') return callNext(request)
+  const middleware = (request, callNext) => serveStaticOrNext(cfg, request, callNext)
+  middleware.__fusionStatic = cfg
+  return middleware
+}
 
-    const reqPath = String(request.path || '/')
-    let relative = ''
-    if (normalized === '/') {
-      relative = reqPath.replace(/^\/+/, '')
-      if (!relative || relative.endsWith('/')) return callNext(request)
-    } else {
-      if (!(reqPath === normalized || reqPath.startsWith(`${normalized}/`))) {
-        return callNext(request)
+/** Build a 200 file response envelope. */
+function staticFileResponse(filePath, method, maxAge) {
+  const size = fs.statSync(filePath).size
+  const headers = {
+    'content-type': guessStaticContentType(filePath),
+    'content-length': String(size),
+  }
+  if (maxAge !== null && maxAge !== undefined) {
+    headers['cache-control'] = `public, max-age=${Number(maxAge)}`
+  }
+  const body = String(method).toUpperCase() === 'HEAD' ? Buffer.alloc(0) : fs.readFileSync(filePath)
+  return { status: 200, body, headers }
+}
+
+/** Try to serve a static file; otherwise callNext. */
+function serveStaticOrNext(cfg, request, callNext) {
+  const method = String(request.method || 'GET').toUpperCase()
+  if (method !== 'GET' && method !== 'HEAD') return callNext(request)
+
+  const reqPath = String(request.path || '/')
+  const normalized = cfg.prefix
+  let relative = ''
+  if (normalized === '/') {
+    relative = reqPath.replace(/^\/+/, '')
+    if (!relative || relative.endsWith('/')) return callNext(request)
+  } else {
+    if (!(reqPath === normalized || reqPath.startsWith(`${normalized}/`))) {
+      return callNext(request)
+    }
+    relative = reqPath.slice(normalized.length).replace(/^\/+/, '')
+    if (!relative) return callNext(request)
+  }
+
+  const candidate = path.resolve(cfg.root, relative)
+  const relToRoot = path.relative(cfg.root, candidate)
+  if (relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
+    return { status: 403, body: { detail: 'Forbidden' } }
+  }
+  if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) {
+    if (cfg.fallthrough) return callNext(request)
+    return { status: 404, body: { detail: 'Not found' } }
+  }
+  return staticFileResponse(candidate, method, cfg.maxAge)
+}
+
+/** Register GET/HEAD routes for files under each staticFiles() mount. */
+function mountStaticFiles(engine, middlewares) {
+  for (const mw of middlewares || []) {
+    const cfg = mw && mw.__fusionStatic
+    if (!cfg || !fs.existsSync(cfg.root) || !fs.statSync(cfg.root).isDirectory()) continue
+    const walk = (dir) => {
+      for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name)
+        const st = fs.statSync(full)
+        if (st.isDirectory()) {
+          walk(full)
+          continue
+        }
+        if (!st.isFile()) continue
+        const rel = path.relative(cfg.root, full).split(path.sep).join('/')
+        const url = cfg.prefix === '/' ? `/${rel}` : `${cfg.prefix}/${rel}`
+        engine.route('GET', url, () => staticFileResponse(full, 'GET', cfg.maxAge))
+        engine.route('HEAD', url, () => staticFileResponse(full, 'HEAD', cfg.maxAge))
       }
-      relative = reqPath.slice(normalized.length).replace(/^\/+/, '')
-      if (!relative) return callNext(request)
     }
-
-    const candidate = path.resolve(rootDir, relative)
-    const relToRoot = path.relative(rootDir, candidate)
-    if (relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
-      return { status: 403, body: { detail: 'Forbidden' } }
-    }
-    if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) {
-      if (allowFallthrough) return callNext(request)
-      return { status: 404, body: { detail: 'Not found' } }
-    }
-
-    const size = fs.statSync(candidate).size
-    const headers = {
-      'content-type': guessStaticContentType(candidate),
-      'content-length': String(size),
-    }
-    if (maxAge !== null && maxAge !== undefined) {
-      headers['cache-control'] = `public, max-age=${Number(maxAge)}`
-    }
-    const body = method === 'HEAD' ? Buffer.alloc(0) : fs.readFileSync(candidate)
-    return { status: 200, body, headers }
+    walk(cfg.root)
   }
 }
 
@@ -1296,6 +1335,8 @@ class FusionApp {
         })
       }
     }
+
+    mountStaticFiles(this.engine, this._middleware)
 
     const swagger = readSwaggerSettings()
     if (swagger.enabled) {
