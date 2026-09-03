@@ -64,3 +64,7 @@ public class UserModule : FusionBaseApi {
 
 - Rust: `cargo test -p fusion-core naming`
 - Python: `pytest tests/python`
+- Node: `./tests/scripts/run-node.sh`
+- C#: `./tests/scripts/run-csharp.sh`
+
+Cross-binding route/Swagger changes must update **all three** languages (`fusion-bindings-parity`).
