@@ -113,6 +113,7 @@ public sealed class FusionApp : IDisposable
             }
         }
 
+        Middleware.MountStaticFiles(this, _middleware);
         SwaggerDocs.Mount(this, SettingsStore.Current);
     }
 

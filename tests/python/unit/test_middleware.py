@@ -12,6 +12,7 @@ from fusion_framework.middleware import (
     request_id,
     require_roles,
     set_active_global,
+    static_files,
 )
 
 
@@ -111,3 +112,31 @@ def test_sync_middleware_propagates_async_handler_coroutine():
     assert inspect.isawaitable(result)
     resolved = asyncio.run(result)
     assert resolved["body"]["ok"] is True
+
+
+def test_static_files_serves_png(tmp_path):
+    """static_files returns file bytes under the URL prefix."""
+    asset = tmp_path / "logo.png"
+    asset.write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    set_active_global([static_files(root=tmp_path, prefix="/static", max_age=60)])
+    request = {"path": "/static/logo.png", "headers": {}, "method": "GET"}
+    result = dispatch_route(request, _handler, [])
+    assert result["status"] == 200
+    assert result["body"] == asset.read_bytes()
+    headers = {str(k).lower(): v for k, v in (result.get("headers") or {}).items()}
+    assert headers["content-type"] == "image/png"
+    assert "max-age=60" in headers["cache-control"]
+
+
+def test_static_files_missing_under_prefix_is_404(tmp_path):
+    set_active_global([static_files(root=tmp_path, prefix="/static")])
+    request = {"path": "/static/missing.png", "headers": {}, "method": "GET"}
+    result = dispatch_route(request, _handler, [])
+    assert result["status"] == 404
+
+
+def test_static_files_outside_prefix_falls_through(tmp_path):
+    set_active_global([static_files(root=tmp_path, prefix="/static")])
+    request = {"path": "/api/items", "headers": {}, "method": "GET"}
+    result = dispatch_route(request, _handler, [])
+    assert result["status"] == 200

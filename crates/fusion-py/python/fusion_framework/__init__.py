@@ -11,6 +11,7 @@ from fusion_framework.middleware import (
     require_permissions,
     require_roles,
     security_headers,
+    static_files,
     use,
 )
 from fusion_framework.pagination import PaginationParams, paginated_body, parse_pagination
@@ -30,6 +31,7 @@ __all__ = [
     "require_permissions",
     "require_roles",
     "security_headers",
+    "static_files",
     "use",
     "PaginationParams",
     "parse_pagination",

@@ -325,6 +325,157 @@ public static class Middleware
         };
     }
 
+    static readonly Dictionary<string, string> StaticMimeTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".css"] = "text/css; charset=utf-8",
+        [".gif"] = "image/gif",
+        [".htm"] = "text/html; charset=utf-8",
+        [".html"] = "text/html; charset=utf-8",
+        [".ico"] = "image/x-icon",
+        [".jpeg"] = "image/jpeg",
+        [".jpg"] = "image/jpeg",
+        [".js"] = "text/javascript; charset=utf-8",
+        [".json"] = "application/json",
+        [".map"] = "application/json",
+        [".png"] = "image/png",
+        [".svg"] = "image/svg+xml",
+        [".txt"] = "text/plain; charset=utf-8",
+        [".webp"] = "image/webp",
+        [".woff"] = "font/woff",
+        [".woff2"] = "font/woff2",
+    };
+
+    /// <summary>Map a file extension to Content-Type (octet-stream fallback).</summary>
+    static string GuessStaticContentType(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return StaticMimeTypes.TryGetValue(ext, out var mime) ? mime : "application/octet-stream";
+    }
+
+    /// <summary>
+    /// Serve files from <paramref name="root"/> for URLs under <paramref name="prefix"/> (WhiteNoise-style).
+    /// <paramref name="root"/> is the folder on disk; <paramref name="prefix"/> is the URL prefix
+    /// (e.g. root=static, prefix=/static → static/logo.png at /static/logo.png).
+    /// Files are mounted as GET/HEAD routes on <see cref="FusionApp.Mount"/>.
+    /// </summary>
+    public static FusionMiddleware StaticFiles(
+        string root = "static",
+        string prefix = "/static",
+        int? maxAge = 3600,
+        bool? fallthrough = null)
+    {
+        var state = new StaticFilesState
+        {
+            Root = Path.GetFullPath(root),
+            Prefix = NormalizeStaticPrefix(prefix),
+            MaxAge = maxAge,
+            Fallthrough = fallthrough ?? NormalizeStaticPrefix(prefix) == "/",
+        };
+
+        FusionMiddleware middleware = (request, callNext) => ServeStaticOrNext(state, request, callNext);
+        StaticFilesStates.Add(middleware, state);
+        return middleware;
+    }
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Delegate, StaticFilesState> StaticFilesStates = new();
+
+    sealed class StaticFilesState
+    {
+        public required string Root { get; init; }
+        public required string Prefix { get; init; }
+        public int? MaxAge { get; init; }
+        public bool Fallthrough { get; init; }
+    }
+
+    static string NormalizeStaticPrefix(string? prefix)
+    {
+        var trimmed = (prefix ?? "/static").Trim().Trim('/');
+        return string.IsNullOrEmpty(trimmed) ? "/" : "/" + trimmed;
+    }
+
+    static object ServeStaticOrNext(StaticFilesState state, FusionRequest request, Func<FusionRequest, object?> callNext)
+    {
+        var method = (request.Method ?? "GET").ToUpperInvariant();
+        if (method is not ("GET" or "HEAD"))
+            return callNext(request)!;
+
+        var reqPath = string.IsNullOrEmpty(request.Path) ? "/" : request.Path;
+        string relative;
+        if (state.Prefix == "/")
+        {
+            relative = reqPath.TrimStart('/');
+            if (string.IsNullOrEmpty(relative) || relative.EndsWith('/'))
+                return callNext(request)!;
+        }
+        else
+        {
+            if (!(reqPath == state.Prefix || reqPath.StartsWith(state.Prefix + "/", StringComparison.Ordinal)))
+                return callNext(request)!;
+            relative = reqPath[state.Prefix.Length..].TrimStart('/');
+            if (string.IsNullOrEmpty(relative))
+                return callNext(request)!;
+        }
+
+        var candidate = Path.GetFullPath(Path.Combine(state.Root, relative));
+        var rootPrefix = state.Root.EndsWith(Path.DirectorySeparatorChar)
+            ? state.Root
+            : state.Root + Path.DirectorySeparatorChar;
+        if (!candidate.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(candidate, state.Root, StringComparison.OrdinalIgnoreCase))
+        {
+            return Error(403, "Forbidden");
+        }
+
+        if (!File.Exists(candidate))
+        {
+            if (state.Fallthrough) return callNext(request)!;
+            return Error(404, "Not found");
+        }
+
+        return StaticFileResponse(candidate, method, state.MaxAge);
+    }
+
+    static Dictionary<string, object?> StaticFileResponse(string path, string method, int? maxAge)
+    {
+        var info = new FileInfo(path);
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["content-type"] = GuessStaticContentType(path),
+            ["content-length"] = info.Length.ToString(),
+        };
+        if (maxAge is int age)
+            headers["cache-control"] = $"public, max-age={age}";
+
+        object body = method == "HEAD" ? Array.Empty<byte>() : File.ReadAllBytes(path);
+        return new Dictionary<string, object?>
+        {
+            ["status"] = 200,
+            ["body"] = body,
+            ["headers"] = headers,
+        };
+    }
+
+    /// <summary>Register GET/HEAD routes for each <see cref="StaticFiles"/> middleware on the app.</summary>
+    internal static void MountStaticFiles(FusionApp app, IEnumerable<FusionMiddleware> middlewares)
+    {
+        foreach (var mw in middlewares)
+        {
+            if (!StaticFilesStates.TryGetValue(mw, out var state))
+                continue;
+            if (!Directory.Exists(state.Root))
+                continue;
+
+            foreach (var filePath in Directory.EnumerateFiles(state.Root, "*", SearchOption.AllDirectories))
+            {
+                var rel = Path.GetRelativePath(state.Root, filePath).Replace('\\', '/');
+                var url = state.Prefix == "/" ? "/" + rel : state.Prefix + "/" + rel;
+                var captured = filePath;
+                app.AddRawRoute("GET", url, () => StaticFileResponse(captured, "GET", state.MaxAge));
+                app.AddRawRoute("HEAD", url, () => StaticFileResponse(captured, "HEAD", state.MaxAge));
+            }
+        }
+    }
+
     /// <summary>Optional identity middleware — not enabled by default. Add via <c>app.Use(Middleware.FrameworkHeaders())</c>.</summary>
     public static FusionMiddleware FrameworkHeaders()
     {

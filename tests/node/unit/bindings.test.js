@@ -16,6 +16,7 @@ const {
   cors,
   requireRoles,
   frameworkHeaders,
+  staticFiles,
   resolveRoutePath,
   apiResourceName,
 } = fusion
@@ -142,5 +143,26 @@ describe('middleware', () => {
     const request = { path: '/', headers: {}, method: 'GET' }
     const result = await runMiddlewareChain(request, [frameworkHeaders()], handler)
     assert.ok(result.headers['x-powered-by'] || result.headers['X-Powered-By'])
+  })
+
+  it('staticFiles serves assets under prefix', async () => {
+    const fs = require('fs')
+    const os = require('os')
+    const path = require('path')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fusion-static-'))
+    const file = path.join(dir, 'logo.png')
+    fs.writeFileSync(file, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+    const request = { method: 'GET', path: '/static/logo.png', headers: {} }
+    const result = await runMiddlewareChain(
+      request,
+      [staticFiles({ root: dir, prefix: '/static', maxAge: 60 })],
+      handler,
+    )
+    assert.equal(result.status, 200)
+    assert.ok(Buffer.isBuffer(result.body) || result.body instanceof Uint8Array)
+    const headers = Object.fromEntries(
+      Object.entries(result.headers || {}).map(([k, v]) => [k.toLowerCase(), v]),
+    )
+    assert.equal(headers['content-type'], 'image/png')
   })
 })

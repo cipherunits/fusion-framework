@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import inspect
 import json
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable, Union
 
 Middleware = Callable[..., Any]
@@ -396,6 +397,148 @@ def cors(
         return _call_next_merge_headers(call_next, request, extra)
 
     return middleware
+
+
+_STATIC_MIME_TYPES: dict[str, str] = {
+    ".css": "text/css; charset=utf-8",
+    ".gif": "image/gif",
+    ".htm": "text/html; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".ico": "image/x-icon",
+    ".jpeg": "image/jpeg",
+    ".jpg": "image/jpeg",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json",
+    ".map": "application/json",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain; charset=utf-8",
+    ".webp": "image/webp",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+}
+
+
+def _guess_static_content_type(path: Path) -> str:
+    """Map a file extension to a Content-Type, defaulting to octet-stream."""
+    return _STATIC_MIME_TYPES.get(path.suffix.lower(), "application/octet-stream")
+
+
+def static_files(
+    root: str | Path = "static",
+    *,
+    prefix: str = "/static",
+    max_age: int | None = 3600,
+    fallthrough: bool | None = None,
+) -> Middleware:
+    """Serve local files under ``root`` for URLs starting with ``prefix`` (WhiteNoise-style).
+
+    - ``root``: folder on disk that holds the files (e.g. ``\"static\"`` or
+      ``Path(__file__).parent / \"templates\" / \"home\"``).
+    - ``prefix``: URL path prefix browsers request (e.g. ``\"/static\"`` so
+      ``static/logo.png`` is served at ``/static/logo.png``). Use ``\"/\"`` to
+      serve files at the site root (``templates/home/a.png`` → ``/a.png``).
+
+    On ``FusionApp.listen()``, matching files are mounted as real GET/HEAD routes
+    (middleware alone cannot see unmatched paths). Only ``GET`` / ``HEAD``.
+    Path traversal is rejected. The returned middleware also short-circuits when
+    invoked on an already-mounted path.
+    """
+    root_path = Path(root).expanduser()
+    normalized = "/" + str(prefix).strip("/") if str(prefix).strip("/") else "/"
+    allow_fallthrough = (normalized == "/") if fallthrough is None else bool(fallthrough)
+    cfg = {
+        "root": root_path,
+        "prefix": normalized,
+        "max_age": max_age,
+        "fallthrough": allow_fallthrough,
+    }
+
+    def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
+        return _serve_static_or_next(cfg, request, call_next)
+
+    middleware.__fusion_static__ = cfg  # type: ignore[attr-defined]
+    return middleware
+
+
+def _serve_static_or_next(
+    cfg: dict[str, Any],
+    request: RequestDict,
+    call_next: Callable[[RequestDict], Any],
+) -> Any:
+    """Try to serve a file for this request; otherwise call the next handler."""
+    method = str(request.get("method", "GET")).upper()
+    if method not in ("GET", "HEAD"):
+        return call_next(request)
+
+    req_path = str(request.get("path") or "/")
+    normalized = str(cfg["prefix"])
+    if normalized == "/":
+        relative = req_path.lstrip("/")
+        if not relative or relative.endswith("/"):
+            return call_next(request)
+    else:
+        if not (req_path == normalized or req_path.startswith(normalized + "/")):
+            return call_next(request)
+        relative = req_path[len(normalized) :].lstrip("/")
+        if not relative:
+            return call_next(request)
+
+    base = Path(cfg["root"]).resolve()
+    candidate = (base / relative).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError:
+        return {"status": 403, "body": {"detail": "Forbidden"}}
+
+    if not candidate.is_file():
+        if cfg["fallthrough"]:
+            return call_next(request)
+        return {"status": 404, "body": {"detail": "Not found"}}
+
+    return _static_file_response(candidate, method, cfg.get("max_age"))
+
+
+def _static_file_response(path: Path, method: str, max_age: int | None) -> dict[str, Any]:
+    """Build a 200 response envelope for a file on disk."""
+    size = path.stat().st_size
+    headers = {
+        "content-type": _guess_static_content_type(path),
+        "content-length": str(size),
+    }
+    if max_age is not None:
+        headers["cache-control"] = f"public, max-age={int(max_age)}"
+    body: Any = b"" if method.upper() == "HEAD" else path.read_bytes()
+    return {"status": 200, "body": body, "headers": headers}
+
+
+def mount_static_files(engine: Any, middlewares: Iterable[Middleware]) -> None:
+    """Register GET/HEAD routes for every file under each ``static_files`` mount."""
+    for middleware in middlewares:
+        cfg = getattr(middleware, "__fusion_static__", None)
+        if not isinstance(cfg, dict):
+            continue
+        root = Path(cfg["root"]).expanduser().resolve()
+        if not root.is_dir():
+            continue
+        prefix = str(cfg["prefix"])
+        max_age = cfg.get("max_age")
+        for file_path in root.rglob("*"):
+            if not file_path.is_file():
+                continue
+            rel = file_path.relative_to(root).as_posix()
+            url = f"/{rel}" if prefix == "/" else f"{prefix}/{rel}"
+            path_for_get = file_path
+            path_for_head = file_path
+
+            def _get(_req: RequestDict, p: Path = path_for_get, age: int | None = max_age) -> dict[str, Any]:
+                return _static_file_response(p, "GET", age)
+
+            def _head(_req: RequestDict, p: Path = path_for_head, age: int | None = max_age) -> dict[str, Any]:
+                return _static_file_response(p, "HEAD", age)
+
+            engine.route("GET", url, _get)
+            engine.route("HEAD", url, _head)
 
 
 def dispatch_route(
