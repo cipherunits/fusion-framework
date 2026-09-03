@@ -99,8 +99,15 @@ def test_framework_headers_awaits_async_handler():
 
 
 def test_sync_middleware_propagates_async_handler_coroutine():
-    request = {"path": "/x", "headers": {}, "state": {"jwt": {"roles": ["admin"]}}}
-    result = dispatch_route(request, _sync_invoker_like, [require_roles("admin")])
+    """Sync permission middleware must still return awaitable async handler results."""
+    from fusion_framework.middleware import require_permissions
+
+    request = {"path": "/x", "headers": {}, "state": {}}
+    result = dispatch_route(
+        request,
+        _sync_invoker_like,
+        [require_permissions(lambda req: True)],
+    )
     assert inspect.isawaitable(result)
     resolved = asyncio.run(result)
     assert resolved["body"]["ok"] is True

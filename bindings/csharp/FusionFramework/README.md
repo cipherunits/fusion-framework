@@ -114,7 +114,7 @@ Parameters appear in Swagger OpenAPI docs.
 
 ```csharp
 MIDDLEWARE.Add(Middleware.BearerJwt());
-Route.Register(typeof(AdminModule), "/api/admin", roles: new[] { "admin" });
+Route.Register(typeof(AdminModule), "/api/admin", permissions: new[] { AdminChecks.IsAdmin });
 ```
 
 ## License

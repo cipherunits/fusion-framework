@@ -414,7 +414,7 @@ fn py_resolve_route_path(template: &str, class_name: &str) -> String {
 }
 
 #[pyfunction(name = "register_route")]
-#[pyo3(signature = (template, api_cls, tags=Vec::new(), desc=None, title=None, version=None, deprecated=false, middleware=Vec::new()))]
+#[pyo3(signature = (template, api_cls, tags=Vec::new(), desc=None, title=None, version=None, deprecated=false, middleware=Vec::new(), requires_permissions=false))]
 fn py_register_route(
     template: &str,
     api_cls: Bound<'_, PyType>,
@@ -424,6 +424,7 @@ fn py_register_route(
     version: Option<String>,
     deprecated: bool,
     middleware: Vec<PyObject>,
+    requires_permissions: bool,
 ) -> PyResult<String> {
     let py = api_cls.py();
     let middleware: Vec<Py<PyAny>> = middleware
@@ -432,6 +433,7 @@ fn py_register_route(
         .collect();
     register_route(
         template, api_cls, tags, desc, title, version, deprecated, middleware,
+        requires_permissions,
     )
 }
 

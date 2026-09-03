@@ -1,4 +1,4 @@
-"""Middleware demo: global JWT decode + route role guard.
+"""Middleware demo: global JWT decode + route permission guards.
 
 Run::
 
@@ -26,7 +26,23 @@ from fusion_framework.config import get_settings, load_settings_module
 from fusion_framework.route import route
 
 
-@route("/api/admin", roles=["admin", "super_admin"])
+def is_admin(request):
+    jwt = (request.get("state") or {}).get("jwt") or {}
+    roles = jwt.get("roles") or []
+    if isinstance(roles, str):
+        roles = [roles]
+    return "admin" in roles or "super_admin" in roles
+
+
+def is_super_admin(request):
+    jwt = (request.get("state") or {}).get("jwt") or {}
+    roles = jwt.get("roles") or []
+    if isinstance(roles, str):
+        roles = [roles]
+    return "super_admin" in roles
+
+
+@route("/api/admin", permissions=[is_admin])
 class AdminModule(FusionBaseApi):
     def get(self):
         user = self.state.get("jwt", {})
@@ -36,7 +52,7 @@ class AdminModule(FusionBaseApi):
         )
 
 
-@route("/api/super", roles=["super_admin"])
+@route("/api/super", permissions=[is_super_admin])
 class SuperModule(FusionBaseApi):
     def get(self):
         return self.response({"message": "super admin only"}, status=status.HTTP_SUCCESS)

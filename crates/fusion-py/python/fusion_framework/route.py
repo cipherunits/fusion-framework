@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Sequence, Type
+from typing import Any, Callable, Optional, Sequence, Type
 
 from fusion_framework._fusion import (
     HTTP_METHODS,
@@ -28,7 +28,7 @@ from fusion_framework.http_route import (
     http_post,
     http_put,
 )
-from fusion_framework.middleware import require_roles
+from fusion_framework.middleware import require_permissions
 
 __all__ = [
     "HTTP_METHODS",
@@ -63,20 +63,22 @@ def route(
     version: Optional[str] = None,
     deprecated: bool = False,
     middleware: Optional[Sequence] = None,
-    roles: Optional[Sequence[str]] = None,
+    permissions: Optional[Sequence[Callable[..., Any]]] = None,
 ) -> Callable[[Type[FusionBaseApi]], Type[FusionBaseApi]]:
     """Register a ``FusionBaseApi`` subclass.
 
     ``middleware`` — callables ``(request, call_next) -> response | call_next(...)``.
-    ``roles`` — shorthand that appends a ``require_roles(...)`` route middleware.
+    ``permissions`` — callables ``(request) -> bool``; all must pass or the route
+    returns 403. Empty / omitted means allow any caller.
     ``version`` — API prefix such as ``v1`` (path becomes ``/v1/...``). Each
     version gets its own OpenAPI spec and appears in the Swagger navbar.
     """
 
     def decorator(cls: Type[FusionBaseApi]) -> Type[FusionBaseApi]:
         route_middleware = list(middleware or [])
-        if roles:
-            route_middleware.append(require_roles(*roles))
+        perm_checks = list(permissions or [])
+        if perm_checks:
+            route_middleware.append(require_permissions(*perm_checks))
 
         register_route(
             path,
@@ -87,6 +89,7 @@ def route(
             version,
             deprecated,
             route_middleware,
+            bool(perm_checks),
         )
         return cls
 

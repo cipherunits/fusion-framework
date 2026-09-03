@@ -609,6 +609,17 @@ async function runMiddlewareChain(request, middlewares, handler) {
   return dispatch(0, request)
 }
 
+function requirePermissions(...checks) {
+  return (request, callNext) => {
+    for (const check of checks) {
+      if (!check(request)) {
+        return { status: 403, body: { detail: 'Forbidden' } }
+      }
+    }
+    return callNext(request)
+  }
+}
+
 function requireRoles(...rolesOrOptions) {
   let roles = rolesOrOptions
   let claim = 'roles'
@@ -692,14 +703,9 @@ function router(routePath, options = {}) {
     ApiClass.__fusion_path_template__ = routePath
 
     const routeMiddleware = Array.isArray(options.middleware) ? [...options.middleware] : []
-    if (Array.isArray(options.roles) && options.roles.length) {
-      routeMiddleware.push(
-        requireRoles({
-          roles: options.roles,
-          claim: options.roleClaim || 'roles',
-          stateKey: options.roleStateKey || 'jwt',
-        }),
-      )
+    const permissionChecks = Array.isArray(options.permissions) ? options.permissions : []
+    if (permissionChecks.length) {
+      routeMiddleware.push(requirePermissions(...permissionChecks))
     }
 
     const classSwagger = {
@@ -716,6 +722,7 @@ function router(routePath, options = {}) {
       middleware: routeMiddleware,
       swagger: classSwagger,
       version_prefix: v,
+      requiresPermissions: permissionChecks.length > 0,
       slots: collectRouteSlots(ApiClass, resolved, classSwagger),
     })
     return ApiClass
@@ -1004,6 +1011,8 @@ function applySwaggerOpenApi(openapi, swagger) {
   return openapi
 }
 
+const OPENAPI_PERMISSIONS_SCHEME = 'FusionPermissions'
+
 function isTemplateClass(ApiClass) {
   let current = ApiClass
   while (current && current !== Function.prototype) {
@@ -1021,10 +1030,13 @@ function fillOpenApiPaths(openapi, versionFilter = null) {
       .map((seg) => seg.slice(1, -1))
   }
 
+  let anyPermissions = false
+
   for (const item of registry) {
     if (!routeMatchesVersion(item, versionFilter)) continue
-    const { ApiClass, swagger: routeSwagger } = item
+    const { ApiClass, swagger: routeSwagger, requiresPermissions } = item
     if (isTemplateClass(ApiClass)) continue
+    if (requiresPermissions) anyPermissions = true
     const slots = item.slots || []
 
     for (const slot of slots) {
@@ -1050,8 +1062,25 @@ function fillOpenApiPaths(openapi, versionFilter = null) {
         deprecated: !!routeSwaggerEntry?.deprecated,
         operationId: `${ApiClass.name}_${slot.handlerMethod}`,
         parameters: params,
-        responses: { 200: { description: 'OK' } },
+        responses: {
+          200: { description: 'OK' },
+          ...(requiresPermissions ? { 403: { description: 'Forbidden — permission check failed' } } : {}),
+        },
+        ...(requiresPermissions ? { security: [{ [OPENAPI_PERMISSIONS_SCHEME]: [] }] } : {}),
       }
+    }
+  }
+
+  if (anyPermissions) {
+    openapi.components = asObject(openapi.components)
+    openapi.components.securitySchemes = {
+      ...asObject(openapi.components.securitySchemes),
+      [OPENAPI_PERMISSIONS_SCHEME]: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'Authorization',
+        description: 'Route requires custom permission checks to pass',
+      },
     }
   }
   return openapi
@@ -1492,6 +1521,7 @@ module.exports = {
   run,
   bearerJwt,
   requireRoles,
+  requirePermissions,
   frameworkHeaders,
   securityHeaders,
   cors,
