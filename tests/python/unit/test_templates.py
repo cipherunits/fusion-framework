@@ -18,6 +18,25 @@ def test_render_builtin_button_macro():
     assert "Go" in html
 
 
+def test_render_badge_and_table(tmp_path: Path):
+    """Badge + table components render with the welcome-page styles."""
+    (tmp_path / "page.html").write_text(
+        """
+        {{<fusion.badge label="ok" variant="success" dot={true} />}}
+        {{<fusion.table headers={headers} rows={rows} />}}
+        """,
+        encoding="utf-8",
+    )
+    html = render_template(
+        "page.html",
+        {"headers": ["A"], "rows": [["1"]]},
+        templates_root=tmp_path,
+    )
+    assert "fusion-badge__dot" in html
+    assert "fusion-table" in html
+    assert "<td>1</td>" in html
+
+
 def test_fusion_base_template_context(tmp_path: Path):
     class Page(FusionBaseTemplate):
         template = "hello.html"

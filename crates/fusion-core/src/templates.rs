@@ -9,6 +9,8 @@ use tera::{Context, Tera};
 
 const BUILTIN_MACROS: &str = include_str!("../assets/templates/fusion/macros.html");
 const BUILTIN_BASE: &str = include_str!("../assets/templates/fusion/base.html");
+const BUILTIN_COMPONENTS_CSS: &str =
+    include_str!("../assets/templates/fusion/components.css");
 
 static ENGINE_CACHE: Mutex<Option<EngineCache>> = Mutex::new(None);
 
@@ -58,6 +60,10 @@ fn build_engine(root: &Path) -> Result<Tera, String> {
     let mut raw: Vec<(String, String)> = vec![
         ("fusion/macros.html".to_string(), BUILTIN_MACROS.to_string()),
         ("fusion/base.html".to_string(), BUILTIN_BASE.to_string()),
+        (
+            "fusion/components.css".to_string(),
+            BUILTIN_COMPONENTS_CSS.to_string(),
+        ),
     ];
 
     if root.is_dir() {
@@ -121,7 +127,11 @@ pub fn builtin_components() -> HashMap<&'static str, &'static str> {
         ),
         (
             "badge",
-            "{{<fusion.badge label=\"...\" variant=\"default\" />}}",
+            "{{<fusion.badge label=\"...\" variant=\"success\" dot={true} />}}",
+        ),
+        (
+            "table",
+            "{{<fusion.table headers={cols} rows={rows} caption=\"...\" />}}",
         ),
     ])
 }
@@ -141,7 +151,48 @@ mod tests {
         std::fs::write(dir.join("test.html"), tpl).unwrap();
         let html = render_template("test.html", &json!({}), &dir).unwrap();
         assert!(html.contains("fusion-btn"));
+        assert!(html.contains("href=\"/\""));
         assert!(html.contains("Go"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_badge_with_dot() {
+        clear_template_cache();
+        let tpl =
+            r#"{{<fusion.badge label="Installation successful" variant="success" dot={true} />}}"#;
+        let dir = std::env::temp_dir().join("fusion_tpl_badge_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.html"), tpl).unwrap();
+        let html = render_template("test.html", &json!({}), &dir).unwrap();
+        assert!(html.contains("fusion-badge--success"));
+        assert!(html.contains("fusion-badge__dot"));
+        assert!(html.contains("Installation successful"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_table_from_arrays() {
+        clear_template_cache();
+        let tpl = r#"{{<fusion.table headers={headers} rows={rows} caption="Products" />}}"#;
+        let dir = std::env::temp_dir().join("fusion_tpl_table_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.html"), tpl).unwrap();
+        let html = render_template(
+            "test.html",
+            &json!({
+                "headers": ["Name", "Status"],
+                "rows": [["Widget", "ok"], ["Gadget", "draft"]],
+            }),
+            &dir,
+        )
+        .unwrap();
+        assert!(html.contains("fusion-table"));
+        assert!(html.contains("<th scope=\"col\">Name</th>"));
+        assert!(html.contains("<td>Widget</td>"));
+        assert!(html.contains("Products"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -159,6 +210,38 @@ mod tests {
         .unwrap();
         let html = render_template("home/index.html", &json!({}), &dir).unwrap();
         assert!(html.contains("color: red"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_card_with_body_slot() {
+        clear_template_cache();
+        let tpl = r#"{% <fusion.card title="Get started"> %}<div class="code">hello</div>{% </fusion.card> %}"#;
+        let dir = std::env::temp_dir().join("fusion_tpl_card_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.html"), tpl).unwrap();
+        let html = render_template("test.html", &json!({}), &dir).unwrap();
+        assert!(html.contains("fusion-card"));
+        assert!(html.contains("Get started"));
+        assert!(html.contains("hello"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn includes_builtin_components_css() {
+        clear_template_cache();
+        let dir = std::env::temp_dir().join("fusion_tpl_components_css_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("test.html"),
+            r#"<style>{% include "fusion/components.css" %}</style>"#,
+        )
+        .unwrap();
+        let html = render_template("test.html", &json!({}), &dir).unwrap();
+        assert!(html.contains(".fusion-btn"));
+        assert!(html.contains(".fusion-table"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

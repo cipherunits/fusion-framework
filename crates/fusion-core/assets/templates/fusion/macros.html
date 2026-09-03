@@ -1,7 +1,14 @@
-{# Fusion built-in UI components (Tera 2). Use: {{<fusion.button label="Save" variant="primary" />}} #}
+{# Fusion built-in UI components (Tera 2).
+   Use: {{<fusion.button label="Save" variant="primary" />}}
+   Docs: include styles via {% include "fusion/components.css" %} or extend fusion/base.html
+#}
 
 {% component fusion.button(label: string, href: string = "", variant: string = "primary", type: string = "button") %}
-<button type="{{ type }}" class="fusion-btn fusion-btn--{{ variant }}"{% if href and type != "submit" %} onclick="window.location.href='{{ href }}'"{% endif %}>{{ label }}</button>
+{%- if href -%}
+<a href="{{ href }}" class="fusion-btn fusion-btn--{{ variant }}">{{ label }}</a>
+{%- else -%}
+<button type="{{ type }}" class="fusion-btn fusion-btn--{{ variant }}">{{ label }}</button>
+{%- endif -%}
 {% endcomponent fusion.button %}
 
 {% component fusion.link(label: string, href: string = "#", variant: string = "default") %}
@@ -10,8 +17,8 @@
 
 {% component fusion.card(title: string = "", content: string = "") %}
 <div class="fusion-card">
-  {% if title %}<h3 class="fusion-card__title">{{ title }}</h3>{% endif %}
-  <div class="fusion-card__body">{{ content | safe }}</div>
+  {% if title %}<div class="fusion-card__title">{{ title }}</div>{% endif %}
+  <div class="fusion-card__body">{% if content %}{{ content | safe }}{% else %}{{ body | safe }}{% endif %}</div>
 </div>
 {% endcomponent fusion.card %}
 
@@ -19,6 +26,34 @@
 <div class="fusion-alert fusion-alert--{{ variant }}" role="alert">{{ message }}</div>
 {% endcomponent fusion.alert %}
 
-{% component fusion.badge(label: string, variant: string = "default") %}
-<span class="fusion-badge fusion-badge--{{ variant }}">{{ label }}</span>
+{# Status/pill badge. Set dot={true} for the success-style indicator used on the welcome page. #}
+{% component fusion.badge(label: string, variant: string = "default", dot: bool = false) %}
+<span class="fusion-badge fusion-badge--{{ variant }}{% if dot %} fusion-badge--with-dot{% endif %}">
+  {%- if dot -%}<span class="fusion-badge__dot" aria-hidden="true"></span>{%- endif -%}
+  {{ label }}
+</span>
 {% endcomponent fusion.badge %}
+
+{# Data table. Pass headers/rows as arrays, and/or nest custom <tr> markup as the body. #}
+{% component fusion.table(headers: array = [], rows: array = [], caption: string = "") %}
+<div class="fusion-table-wrap">
+  <table class="fusion-table">
+    {% if caption %}<caption>{{ caption }}</caption>{% endif %}
+    {% if headers %}
+    <thead>
+      <tr>
+        {% for h in headers %}<th scope="col">{{ h }}</th>{% endfor %}
+      </tr>
+    </thead>
+    {% endif %}
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+      {{ body | safe }}
+    </tbody>
+  </table>
+</div>
+{% endcomponent fusion.table %}

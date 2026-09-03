@@ -43,6 +43,8 @@ class HomeModule(FusionBaseTemplate):
         return {
             "title": "Fusion Templates",
             "message": "Hello from Tera!",
+            "headers": ["Name", "Status"],
+            "rows": [["Widget", "ok"], ["Gadget", "draft"]],
         }
 
 
