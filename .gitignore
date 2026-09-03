@@ -79,3 +79,8 @@ Desktop.ini
 ## Local secrets / overrides (keep examples/*.json samples in repo)
 fusion.local.json
 *.local.json
+
+
+.tmp
+.nuget
+.sentry-native

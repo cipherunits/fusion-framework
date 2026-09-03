@@ -1,11 +1,46 @@
-{% extends "fusion/base.html" %}
-
-{% block title %}{{ title }}{% endblock %}
-
-{% block content %}
-  {{<fusion.alert message={message} variant="success" />}}
-  <h1>{{ title }}</h1>
-  <p>{{ message }}</p>
-  {{<fusion.button label="API docs" href="/swagger" variant="primary" />}}
-  {{<fusion.card title="Built-in components" content="<p>Use <code>fusion/macros.html</code> components in your templates.</p>" />}}
-{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  <style>
+    {% include "fusion/components.css" %}
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .container {
+      width: 100%;
+      max-width: 760px;
+      padding: 40px 24px;
+      text-align: center;
+    }
+    .links {
+      margin-top: 28px;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    {{<fusion.badge label="Components ready" variant="success" dot={true} />}}
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <div class="links">
+      {{<fusion.button label="API docs" href="/swagger" variant="primary" />}}
+      {{<fusion.button label="JSON context" href="/pages/home?format=json" variant="secondary" />}}
+    </div>
+    {{<fusion.table headers={headers} rows={rows} caption="Sample table" />}}
+  </main>
+</body>
+</html>

@@ -34,7 +34,12 @@ class FusionBaseTemplate(FusionBaseApi):
 
     Built-in UI components are defined in ``fusion/macros.html`` (Tera 2 components)::
 
-        {{<fusion.button label="Save" variant="primary" />}}
+        {{<fusion.button label="Save" href="/save" variant="primary" />}}
+        {{<fusion.badge label="Ready" variant="success" dot={true} />}}
+        {{<fusion.table headers={cols} rows={rows} />}}
+
+    Include styles with ``{% include "fusion/components.css" %}`` or extend
+    ``fusion/base.html``.
     """
 
     __fusion_template__ = True
