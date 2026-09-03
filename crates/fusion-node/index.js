@@ -924,6 +924,40 @@ function collectRouteVersions() {
   return { versions, hasUnversioned }
 }
 
+function clearRouteRegistry() {
+  registry.length = 0
+}
+
+function testSwaggerConfig() {
+  return {
+    path: '/swagger',
+    info: { title: 'fusion-framework', version: '1.0.0' },
+    servers: [],
+    auth: { schemes: {}, global: [], oauth: {} },
+    navbar: {
+      enabled: true,
+      showUrlInput: false,
+      showUrlInputSet: true,
+      urlsSet: false,
+      urls: [],
+    },
+    ui: {},
+    pageTitle: 'Fusion API Docs',
+  }
+}
+
+function openapiSpec(version = null) {
+  return buildOpenApi(testSwaggerConfig(), version)
+}
+
+function routeVersions() {
+  return collectRouteVersions().versions
+}
+
+function hasUnversionedRoutes() {
+  return collectRouteVersions().hasUnversioned
+}
+
 function swaggerVersionUrls(prefix) {
   const { versions, hasUnversioned } = collectRouteVersions()
   const urls = versions.map((label) => ({
@@ -1468,6 +1502,10 @@ module.exports = {
   parsePagination,
   paginatedBody,
   renderTemplate,
+  clearRouteRegistry,
+  openapiSpec,
+  routeVersions,
+  hasUnversionedRoutes,
   getHttpMethods: () => HTTP_METHODS,
   apiResourceNameJs: native.apiResourceNameJs,
   resolveRoutePathJs: native.resolveRoutePathJs,
