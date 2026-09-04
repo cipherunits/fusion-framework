@@ -1045,6 +1045,47 @@ function swaggerAssetUrl(prefix, name) {
   return `${prefix}/assets/${name}`
 }
 
+
+/** Normalize cache.monitor.path from settings. */
+function normalizeCacheMonitorPath(raw) {
+  let path = String(raw == null || raw === '' ? '/__fusion/cache' : raw).trim() || '/__fusion/cache'
+  if (!path.startsWith('/')) path = `/${path}`
+  return path.replace(/\/+$/, '') || '/__fusion/cache'
+}
+
+/**
+ * Built-in cache monitor (FusionBaseTemplate + fusion/cache_monitor.html).
+ * When cache.monitor.enabled is false, no routes are registered.
+ */
+function mountCacheMonitor(engine, settingsInstance) {
+  const s = settingsInstance || settings
+  if (!truthyEnabled(s.get('cache.monitor.enabled', false), false)) {
+    return false
+  }
+  cache.configure(s)
+  const path = normalizeCacheMonitorPath(s.get('cache.monitor.path', '/__fusion/cache'))
+
+  class CacheMonitorPanel extends FusionBaseTemplate {
+    static template = 'fusion/cache_monitor.html'
+    context() {
+      return cache.panelContext()
+    }
+  }
+
+  const htmlHandler = (errOrRequest, maybeRequest) => {
+    const request = nativeRequestArg(errOrRequest, maybeRequest)
+    return new CacheMonitorPanel(request || emptyRequest()).get()
+  }
+  const jsonHandler = () => cache.snapshot()
+
+  engine.route('GET', path, htmlHandler)
+  if (path !== '/') {
+    engine.route('GET', `${path}/`, htmlHandler)
+  }
+  engine.route('GET', `${path}/json`, jsonHandler)
+  return true
+}
+
 function mountSwaggerAssets(engine, prefix) {
   const assetsPrefix = `${prefix}/assets`
   for (const [name, { contentType, body }] of Object.entries(SWAGGER_ASSETS)) {
@@ -1394,6 +1435,8 @@ class FusionApp {
       }
     }
 
+    mountCacheMonitor(this.engine, settings)
+
     this.mounted = true
   }
 
@@ -1417,7 +1460,12 @@ class FusionApp {
     }
 
     const snapshot = getSettings()
-    const settingsReload = Boolean(snapshot.get('reload', false))
+    // getSettings() returns a plain {host,port,debug,env}; reload lives on the Settings handle.
+    const settingsReload = Boolean(
+      typeof snapshot.get === 'function'
+        ? snapshot.get('reload', false)
+        : settings.get('reload', false),
+    )
     const shouldReload =
       reloadArg === undefined || reloadArg === null ? settingsReload : Boolean(reloadArg)
 
@@ -1702,6 +1750,16 @@ const cache = {
     this._ensure()
     return native.cacheDriver()
   },
+  /** Live entries + recent mutations (monitor JSON). */
+  snapshot() {
+    this._ensure()
+    return native.cacheSnapshot()
+  },
+  /** Template context for fusion/cache_monitor.html. */
+  panelContext() {
+    this._ensure()
+    return native.cachePanelContext()
+  },
   reset() {
     native.cacheReset()
     this._ready = false
@@ -1735,6 +1793,32 @@ const cache = {
   },
   async aclear() {
     this.clear()
+  },
+}
+
+/** Process-wide Tokio background tasks. */
+const tasks = {
+  /** Run `fn` on the Tokio background runtime. Returns task id. */
+  spawn(fn) {
+    if (typeof fn !== 'function') throw new TypeError('callback must be a function')
+    return native.taskSpawn(fn)
+  },
+  /** Run `fn` after `delayMs` milliseconds. Returns task id. */
+  spawnAfter(delayMs, fn) {
+    if (typeof fn !== 'function') throw new TypeError('callback must be a function')
+    return native.taskSpawnAfter(Number(delayMs) || 0, fn)
+  },
+  /** Cancel a pending/running task. */
+  cancel(taskId) {
+    return native.taskCancel(String(taskId))
+  },
+  /** Status string, or null if unknown. */
+  status(taskId) {
+    return native.taskStatus(String(taskId))
+  },
+  /** Abort and clear all tracked tasks (tests). */
+  reset() {
+    native.taskReset()
   },
 }
 
@@ -1781,6 +1865,7 @@ module.exports = {
   parsePagination,
   paginatedBody,
   cache,
+  tasks,
   renderTemplate,
   clearRouteRegistry,
   openapiSpec,

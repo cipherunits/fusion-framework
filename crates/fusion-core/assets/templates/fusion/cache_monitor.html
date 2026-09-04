@@ -1,0 +1,74 @@
+{% extends "fusion/base.html" %}
+{% block title %}{{ title | default(value="Cache Monitor") }}{% endblock %}
+{% block head %}
+<meta http-equiv="refresh" content="5" />
+<style>
+  .fusion-cache-monitor { max-width: 960px; margin: 0 auto; }
+  .fusion-cache-monitor__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .fusion-cache-monitor__header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+  .fusion-cache-monitor__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+  .fusion-cache-monitor__section { margin-bottom: 1.75rem; }
+  .fusion-cache-monitor__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .fusion-cache-monitor__empty {
+    color: #64748b;
+    font-size: 0.95rem;
+    margin: 0.5rem 0 0;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<div class="fusion-cache-monitor">
+  <div class="fusion-cache-monitor__header">
+    <h1>{{ title | default(value="Cache Monitor") }}</h1>
+    <div class="fusion-cache-monitor__meta">
+      {{<fusion.badge label={driver_label} variant="success" dot={true} />}}
+      {{<fusion.badge label={entry_badge} variant="default" />}}
+      {{<fusion.badge label={event_badge} variant="default" />}}
+    </div>
+  </div>
+
+  {% <fusion.card title="Live entries"> %}
+    {% if empty_entries %}
+    <p class="fusion-cache-monitor__empty">No keys in the process-wide cache.</p>
+    {% else %}
+    {{<fusion.table headers={entry_headers} rows={entry_rows} caption="Current cache keys" page_size={10} />}}
+    {% endif %}
+  {% </fusion.card> %}
+
+  <div class="fusion-cache-monitor__section"></div>
+
+  {% <fusion.card title="Recent activity"> %}
+    {% if empty_events %}
+    <p class="fusion-cache-monitor__empty">No set / delete / clear events yet.</p>
+    {% else %}
+    {{<fusion.table headers={event_headers} rows={event_rows} caption="Recent cache mutations" page_size={10} />}}
+    {% endif %}
+  {% </fusion.card> %}
+
+  <div class="fusion-cache-monitor__actions">
+    {{<fusion.button label="Refresh" href={path} variant="primary" />}}
+    {{<fusion.button label="JSON snapshot" href={json_path} variant="secondary" />}}
+  </div>
+</div>
+{% endblock %}

@@ -23,17 +23,19 @@ def test_render_badge_and_table(tmp_path: Path):
     (tmp_path / "page.html").write_text(
         """
         {{<fusion.badge label="ok" variant="success" dot={true} />}}
-        {{<fusion.table headers={headers} rows={rows} />}}
+        {{<fusion.table headers={headers} rows={rows} page_size={10} />}}
         """,
         encoding="utf-8",
     )
     html = render_template(
         "page.html",
-        {"headers": ["A"], "rows": [["1"]]},
+        {"headers": ["A"], "rows": [["1"], ["2"]]},
         templates_root=tmp_path,
     )
     assert "fusion-badge__dot" in html
     assert "fusion-table" in html
+    assert "data-page-size=\"10\"" in html
+    assert "fusion-table-pager" in html
     assert "<td>1</td>" in html
 
 

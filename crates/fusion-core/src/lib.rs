@@ -15,6 +15,7 @@ mod serialize;
 mod server;
 mod settings;
 mod status;
+mod tasks;
 mod templates;
 
 pub use api_context::ApiContext;
@@ -48,6 +49,10 @@ pub use serialize::{is_response_envelope, response_from_value};
 pub use settings::Settings;
 pub use status::{
     HTTP_STATUS_CODES, is_client_error, is_informational, is_redirect, is_server_error, is_success,
+};
+pub use tasks::{
+    TaskStatus, cancel as task_cancel, reset_for_tests as reset_tasks, spawn_after_ms,
+    spawn_after_ms_future, spawn_fn, spawn_future, status as task_status,
 };
 pub use templates::{builtin_components, clear_template_cache, render_template};
 

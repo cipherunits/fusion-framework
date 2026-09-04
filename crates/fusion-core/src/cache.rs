@@ -14,15 +14,24 @@
 //!   "port": 6379,
 //!   "username": null,
 //!   "password": null,
-//!   "db": 0
+//!   "db": 0,
+//!   "monitor": {
+//!     "enabled": true,
+//!     "path": "/__fusion/cache",
+//!     "max_events": 50
+//!   }
 //! }
 //! ```
+//!
+//! When ``cache.monitor.enabled`` is false, bindings must not register the
+//! monitor HTML/JSON routes (security: disable endpoints, not only UI).
 
-use std::sync::{Arc, OnceLock, RwLock};
-use std::time::{Duration, Instant};
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use moka::sync::Cache as MokaCache;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::settings::Settings;
 
@@ -59,6 +68,12 @@ pub struct CacheConfig {
     pub username: Option<String>,
     pub password: Option<String>,
     pub db: Option<u64>,
+    /// Built-in cache monitor panel (HTML + JSON). Off = no routes mounted.
+    pub monitor_enabled: bool,
+    /// URL path for the monitor UI (JSON at ``{path}/json``).
+    pub monitor_path: String,
+    /// Ring-buffer size for recent set/delete/clear events.
+    pub monitor_max_events: usize,
 }
 
 impl Default for CacheConfig {
@@ -74,6 +89,9 @@ impl Default for CacheConfig {
             username: None,
             password: None,
             db: None,
+            monitor_enabled: false,
+            monitor_path: "/__fusion/cache".into(),
+            monitor_max_events: 50,
         }
     }
 }
@@ -105,8 +123,58 @@ impl CacheConfig {
         cfg.username = settings.get_str("cache.username");
         cfg.password = settings.get_str("cache.password");
         cfg.db = settings.get_u64("cache.db");
+        cfg.monitor_enabled = settings
+            .get_bool("cache.monitor.enabled")
+            .unwrap_or(false);
+        if let Some(path) = settings.get_str("cache.monitor.path") {
+            let trimmed = path.trim();
+            if !trimmed.is_empty() {
+                cfg.monitor_path = if trimmed.starts_with('/') {
+                    trimmed.to_string()
+                } else {
+                    format!("/{trimmed}")
+                };
+            }
+        }
+        if let Some(n) = settings.get_u64("cache.monitor.max_events") {
+            cfg.monitor_max_events = (n as usize).clamp(1, 10_000);
+        }
         cfg
     }
+}
+
+/// Monitor panel settings derived from ``cache.monitor.*``.
+#[derive(Debug, Clone)]
+pub struct MonitorConfig {
+    pub enabled: bool,
+    pub path: String,
+    pub max_events: usize,
+}
+
+impl MonitorConfig {
+    /// Read monitor settings (does not open a cache).
+    pub fn from_settings(settings: &Settings) -> Self {
+        let cfg = CacheConfig::from_settings(settings);
+        Self {
+            enabled: cfg.monitor_enabled,
+            path: cfg.monitor_path,
+            max_events: cfg.monitor_max_events,
+        }
+    }
+}
+
+fn now_unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+#[derive(Debug, Clone)]
+struct CacheEvent {
+    op: String,
+    key: Option<String>,
+    at_ms: u64,
 }
 
 fn normalize_driver(name: &str) -> String {
@@ -124,6 +192,10 @@ pub struct Cache {
     inner: Arc<dyn CacheBackend>,
     default_ttl: Option<Duration>,
     driver: String,
+    events: Arc<Mutex<VecDeque<CacheEvent>>>,
+    max_events: usize,
+    monitor_enabled: bool,
+    monitor_path: String,
 }
 
 trait CacheBackend: Send + Sync {
@@ -131,6 +203,7 @@ trait CacheBackend: Send + Sync {
     fn get(&self, key: &str) -> Option<Entry>;
     fn delete(&self, key: &str) -> bool;
     fn clear(&self);
+    fn entries(&self) -> Vec<(String, Entry)>;
 }
 
 struct MokaBackend {
@@ -169,6 +242,19 @@ impl CacheBackend for MokaBackend {
     fn clear(&self) {
         self.store.invalidate_all();
     }
+
+    fn entries(&self) -> Vec<(String, Entry)> {
+        let mut out = Vec::new();
+        for (key, entry) in self.store.iter() {
+            if entry.alive() {
+                out.push((key.as_ref().clone(), entry));
+            } else {
+                self.store.invalidate(key.as_ref());
+            }
+        }
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
 }
 
 impl Cache {
@@ -192,7 +278,25 @@ impl Cache {
             inner: backend,
             default_ttl: config.default_ttl,
             driver,
+            events: Arc::new(Mutex::new(VecDeque::new())),
+            max_events: config.monitor_max_events.max(1),
+            monitor_enabled: config.monitor_enabled,
+            monitor_path: config.monitor_path,
         })
+    }
+
+    fn record(&self, op: &str, key: Option<&str>) {
+        let Ok(mut guard) = self.events.lock() else {
+            return;
+        };
+        guard.push_front(CacheEvent {
+            op: op.to_string(),
+            key: key.map(str::to_string),
+            at_ms: now_unix_ms(),
+        });
+        while guard.len() > self.max_events {
+            guard.pop_back();
+        }
     }
 
     /// Driver name currently in use (`moka`, …).
@@ -215,6 +319,7 @@ impl Cache {
                 expires_at,
             },
         );
+        self.record("set", Some(key));
     }
 
     /// Fetch a value if present and not expired.
@@ -224,7 +329,11 @@ impl Cache {
 
     /// Remove a key; returns whether it existed.
     pub fn delete(&self, key: &str) -> bool {
-        self.inner.delete(key)
+        let existed = self.inner.delete(key);
+        if existed {
+            self.record("delete", Some(key));
+        }
+        existed
     }
 
     /// True when the key is present and not expired.
@@ -261,6 +370,132 @@ impl Cache {
     /// Drop all entries (test helper / admin).
     pub fn clear(&self) {
         self.inner.clear();
+        self.record("clear", None);
+    }
+
+    /// Whether the built-in monitor should be mounted for this cache.
+    pub fn monitor_enabled(&self) -> bool {
+        self.monitor_enabled
+    }
+
+    /// Monitor UI path (JSON lives at ``{path}/json``).
+    pub fn monitor_path(&self) -> &str {
+        &self.monitor_path
+    }
+
+    /// JSON snapshot for the monitor panel (entries + recent events).
+    pub fn snapshot(&self) -> Value {
+        let entries: Vec<Value> = self
+            .inner
+            .entries()
+            .into_iter()
+            .map(|(key, entry)| {
+                let ttl_remaining_secs = entry.expires_at.map(|at| {
+                    at.saturating_duration_since(Instant::now()).as_secs()
+                });
+                json!({
+                    "key": key,
+                    "value": entry.value,
+                    "ttl_remaining_secs": ttl_remaining_secs,
+                })
+            })
+            .collect();
+        let events: Vec<Value> = self
+            .events
+            .lock()
+            .map(|g| {
+                g.iter()
+                    .map(|e| {
+                        json!({
+                            "op": e.op,
+                            "key": e.key,
+                            "at_ms": e.at_ms,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        json!({
+            "driver": self.driver,
+            "entry_count": entries.len(),
+            "event_count": events.len(),
+            "entries": entries,
+            "events": events,
+            "monitor": {
+                "enabled": self.monitor_enabled,
+                "path": self.monitor_path,
+            }
+        })
+    }
+
+    /// Template context for the built-in cache monitor panel.
+    pub fn panel_context(&self) -> Value {
+        let snap = self.snapshot();
+        let entries = snap["entries"].as_array().cloned().unwrap_or_default();
+        let events = snap["events"].as_array().cloned().unwrap_or_default();
+        let entry_rows: Vec<Value> = entries
+            .iter()
+            .map(|e| {
+                let key = e["key"].as_str().unwrap_or("").to_string();
+                let value = display_cache_value(&e["value"]);
+                let ttl = match e.get("ttl_remaining_secs") {
+                    Some(Value::Null) | None => "∞".to_string(),
+                    Some(v) => v.to_string(),
+                };
+                json!([key, value, ttl])
+            })
+            .collect();
+        let event_rows: Vec<Value> = events
+            .iter()
+            .map(|e| {
+                let op = e["op"].as_str().unwrap_or("").to_string();
+                let key = e
+                    .get("key")
+                    .and_then(|k| k.as_str())
+                    .unwrap_or("—")
+                    .to_string();
+                let at = e
+                    .get("at_ms")
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "—".into());
+                json!([op, key, at])
+            })
+            .collect();
+        let path = self.monitor_path.trim_end_matches('/').to_string();
+        let path = if path.is_empty() {
+            "/__fusion/cache".to_string()
+        } else {
+            path
+        };
+        let entry_count = entries.len();
+        let event_count = events.len();
+        json!({
+            "title": "Cache Monitor",
+            "driver": self.driver,
+            "driver_label": self.driver,
+            "entry_count": entry_count,
+            "event_count": event_count,
+            "entry_badge": format!("{entry_count} keys"),
+            "event_badge": format!("{event_count} events"),
+            "empty_entries": entry_count == 0,
+            "empty_events": event_count == 0,
+            "entry_headers": ["Key", "Value", "TTL (s)"],
+            "entry_rows": entry_rows,
+            "event_headers": ["Op", "Key", "Time (ms)"],
+            "event_rows": event_rows,
+            "path": path,
+            "json_path": format!("{path}/json"),
+        })
+    }
+}
+
+fn display_cache_value(value: &Value) -> String {
+    let raw = serde_json::to_string(value).unwrap_or_else(|_| "null".into());
+    if raw.chars().count() > 160 {
+        let truncated: String = raw.chars().take(157).collect();
+        format!("{truncated}...")
+    } else {
+        raw
     }
 }
 
@@ -357,6 +592,26 @@ pub fn clear() -> Result<(), String> {
 /// Active driver name (`moka`, …).
 pub fn driver() -> Result<String, String> {
     with_global(|c| c.driver().to_string())
+}
+
+/// Process-wide monitor snapshot (entries + events).
+pub fn snapshot() -> Result<Value, String> {
+    with_global(|c| c.snapshot())
+}
+
+/// Template context for the built-in monitor HTML panel.
+pub fn panel_context() -> Result<Value, String> {
+    with_global(|c| c.panel_context())
+}
+
+/// Whether the global cache wants the monitor mounted.
+pub fn monitor_enabled() -> Result<bool, String> {
+    with_global(|c| c.monitor_enabled())
+}
+
+/// Monitor path from the global cache config.
+pub fn monitor_path() -> Result<String, String> {
+    with_global(|c| c.monitor_path().to_string())
 }
 
 /// Reset global cache (tests).
@@ -491,6 +746,32 @@ mod tests {
         cache.clear();
         assert!(!cache.exists("a"));
         assert!(!cache.exists("b"));
+    }
+
+    #[test]
+    fn snapshot_lists_entries_and_events() {
+        let cache = Cache::open(CacheConfig {
+            default_ttl: None,
+            monitor_enabled: true,
+            monitor_path: "/__fusion/cache".into(),
+            monitor_max_events: 10,
+            ..CacheConfig::default()
+        })
+        .unwrap();
+        cache.set("a", json!(1), None);
+        cache.set("b", json!({"x": true}), None);
+        let _ = cache.delete("a");
+        let snap = cache.snapshot();
+        assert_eq!(snap["driver"], "moka");
+        assert_eq!(snap["entry_count"], 1);
+        assert_eq!(snap["monitor"]["enabled"], true);
+        assert_eq!(snap["monitor"]["path"], "/__fusion/cache");
+        let entries = snap["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0]["key"], "b");
+        let events = snap["events"].as_array().unwrap();
+        assert!(events.len() >= 2);
+        assert_eq!(events[0]["op"], "delete");
     }
 
     #[test]

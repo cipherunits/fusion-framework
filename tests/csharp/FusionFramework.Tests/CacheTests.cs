@@ -70,4 +70,52 @@ public class CacheTests
         await Cache.ClearAsync();
         Assert.Null(await Cache.GetAsync("async-k"));
     }
+
+    [Fact]
+    public void SnapshotAndPanelContext()
+    {
+        Cache.Set("demo", new { n = 1 });
+        var snap = Cache.Snapshot();
+        Assert.Equal("moka", snap["driver"]?.GetValue<string>());
+        Assert.Equal(1, snap["entry_count"]?.GetValue<int>());
+        Assert.Equal("demo", snap["entries"]?[0]?["key"]?.GetValue<string>());
+        Assert.Equal("set", snap["events"]?[0]?["op"]?.GetValue<string>());
+
+        var ctx = Cache.PanelContext();
+        Assert.Equal("Cache Monitor", ctx["title"]?.GetValue<string>());
+        Assert.False(ctx["empty_entries"]!.GetValue<bool>());
+        Assert.Equal("demo", ctx["entry_rows"]?[0]?[0]?.GetValue<string>());
+        Assert.EndsWith("/json", ctx["json_path"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void MountRespectsEnabledFlag()
+    {
+        var off = new FusionSettings();
+        off.Merge(new JsonObject
+        {
+            ["cache"] = new JsonObject
+            {
+                ["monitor"] = new JsonObject { ["enabled"] = false },
+            },
+        });
+        using var appOff = new FusionApp(off);
+        Assert.False(CacheMonitor.Mount(appOff, off));
+
+        var on = new FusionSettings();
+        on.Merge(new JsonObject
+        {
+            ["cache"] = new JsonObject
+            {
+                ["driver"] = "moka",
+                ["monitor"] = new JsonObject
+                {
+                    ["enabled"] = true,
+                    ["path"] = "/__fusion/cache",
+                },
+            },
+        });
+        using var appOn = new FusionApp(on);
+        Assert.True(CacheMonitor.Mount(appOn, on));
+    }
 }

@@ -148,6 +148,15 @@ Cache.DeleteOrSet("user:1", new { name = "Bob" });
 Cache.Clear();
 await Cache.SetAsync("user:2", new { name = "Ada" });
 await Cache.ClearAsync();
+
+## Background tasks
+
+```csharp
+var id = BackgroundTasks.Spawn(() => Console.WriteLine("done"));
+BackgroundTasks.SpawnAfter(1000, () => Console.WriteLine("later"));
+BackgroundTasks.Cancel(id);
+BackgroundTasks.Status(id); // pending|running|done|cancelled|failed
+```
 ```
 
 ## License

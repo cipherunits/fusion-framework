@@ -749,3 +749,126 @@ pub extern "C" fn fusion_cache_clear() -> c_int {
 pub extern "C" fn fusion_cache_reset() {
     fusion_core::cache::reset_global();
 }
+
+/// JSON snapshot of cache entries + recent events. Free with fusion_string_free.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_snapshot() -> *mut c_char {
+    match fusion_core::cache::snapshot() {
+        Ok(v) => value_to_cstring(&v),
+        Err(e) => {
+            eprintln!("fusion_cache_snapshot: {e}");
+            ptr::null_mut()
+        }
+    }
+}
+
+/// JSON template context for the built-in monitor panel. Free with fusion_string_free.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_panel_context() -> *mut c_char {
+    match fusion_core::cache::panel_context() {
+        Ok(v) => value_to_cstring(&v),
+        Err(e) => {
+            eprintln!("fusion_cache_panel_context: {e}");
+            ptr::null_mut()
+        }
+    }
+}
+
+/// C callback invoked from a Tokio worker to run a host-language job.
+pub type FusionTaskCallback = Option<extern "C" fn(*mut c_void)>;
+/// Optional freer for `user_data` after the job finishes or is dropped (cancel).
+pub type FusionTaskDataFree = Option<extern "C" fn(*mut c_void)>;
+
+struct FfiTaskJob {
+    callback: extern "C" fn(*mut c_void),
+    data: usize,
+    free_data: FusionTaskDataFree,
+}
+
+impl FfiTaskJob {
+    /// Run the host callback once.
+    fn run(self) {
+        (self.callback)(self.data as *mut c_void);
+    }
+}
+
+impl Drop for FfiTaskJob {
+    fn drop(&mut self) {
+        if let Some(free) = self.free_data.take() {
+            free(self.data as *mut c_void);
+        }
+    }
+}
+
+/// Spawn a background task. Returns task id (free with fusion_string_free), or null on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_task_spawn(
+    callback: FusionTaskCallback,
+    user_data: *mut c_void,
+    free_data: FusionTaskDataFree,
+) -> *mut c_char {
+    let Some(cb) = callback else {
+        return ptr::null_mut();
+    };
+    let job = FfiTaskJob {
+        callback: cb,
+        data: user_data as usize,
+        free_data,
+    };
+    let id = fusion_core::spawn_fn(move || {
+        job.run();
+    });
+    to_cstring(&id)
+}
+
+/// Spawn after `delay_ms` milliseconds.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_task_spawn_after(
+    delay_ms: u64,
+    callback: FusionTaskCallback,
+    user_data: *mut c_void,
+    free_data: FusionTaskDataFree,
+) -> *mut c_char {
+    let Some(cb) = callback else {
+        return ptr::null_mut();
+    };
+    let job = FfiTaskJob {
+        callback: cb,
+        data: user_data as usize,
+        free_data,
+    };
+    let id = fusion_core::spawn_after_ms(delay_ms, move || {
+        job.run();
+    });
+    to_cstring(&id)
+}
+
+/// Cancel a task by id. 1 = known, 0 = unknown, -1 = bad id pointer.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_task_cancel(id: *const c_char) -> c_int {
+    let id = cstr_to_str(id);
+    if id.is_empty() {
+        return -1;
+    }
+    if fusion_core::task_cancel(id) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Status string for a task id (free with fusion_string_free), or null if unknown.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_task_status(id: *const c_char) -> *mut c_char {
+    let id = cstr_to_str(id);
+    match fusion_core::task_status(id) {
+        Some(s) => to_cstring(s.as_str()),
+        None => ptr::null_mut(),
+    }
+}
+
+/// Abort and clear all tracked tasks (tests).
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_task_reset() {
+    fusion_core::reset_tasks();
+}

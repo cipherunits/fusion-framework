@@ -11,7 +11,12 @@ Configure via ``fusion.<env>.json``::
       "port": 6379,
       "username": null,
       "password": null,
-      "db": 0
+      "db": 0,
+      "monitor": {
+        "enabled": true,
+        "path": "/__fusion/cache",
+        "max_events": 50
+      }
     }
 
 ``default_ttl``:
@@ -53,8 +58,10 @@ from fusion_framework._fusion import (
     cache_exists_or_set as _cache_exists_or_set,
     cache_get as _cache_get,
     cache_get_or_set as _cache_get_or_set,
+    cache_panel_context as _cache_panel_context,
     cache_reset as _cache_reset,
     cache_set as _cache_set,
+    cache_snapshot as _cache_snapshot,
 )
 
 _configured = False
@@ -159,6 +166,18 @@ def driver() -> str:
     return str(_cache_driver())
 
 
+def snapshot() -> dict[str, Any]:
+    """JSON snapshot of live entries and recent cache mutations (for the monitor)."""
+    _ensure()
+    return dict(_cache_snapshot())
+
+
+def panel_context() -> dict[str, Any]:
+    """Template context for the built-in ``fusion/cache_monitor.html`` panel."""
+    _ensure()
+    return dict(_cache_panel_context())
+
+
 def reset() -> None:
     """Drop the global cache instance (tests)."""
     global _configured
@@ -246,6 +265,8 @@ __all__ = [
     "exists_or_set",
     "clear",
     "driver",
+    "snapshot",
+    "panel_context",
     "reset",
     "aset",
     "aget",

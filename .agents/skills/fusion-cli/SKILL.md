@@ -118,11 +118,12 @@ C# (`asp-core`): `main.cs`, `*.csproj` (`net10.0`), `[Route]` / `[HttpGet]`.
 ### What the starter demonstrates
 
 - `FusionBaseTemplate` at `/` (Tera templates; **not** listed in Swagger).
-- Welcome UI via built-in components: `fusion.badge`, `fusion.button`, `fusion.card`, `fusion.table` (styles: `{% include "fusion/components.css" %}`).
+- Welcome UI via built-in components: `fusion.badge`, `fusion.button`, `fusion.card`, `fusion.table` (optional `page_size={10}` for client-side row pagination; styles: `{% include "fusion/components.css" %}`).
 - `FusionBaseApi` at `api/[module]` with `version="v1"` → `/v1/api/product/…`.
 - Convention verbs (`get` / `post` / …) plus one custom slot (`http_get` / `httpGet` / `[HttpGet]` with `[action]`).
 - Opt-in middleware list in `main` (e.g. `request_id`, `cors`, `cache_headers`, `security_headers`, `framework_headers`). Framework does **not** auto-enable middleware; the scaffold opts in.
 - Application cache defaults to **moka** (`cache` block in env JSON); see `fusion-cache` skill.
+- Cache monitor (`cache.monitor.enabled`) is on in **dev** and off in **stage/prod**; when off, no monitor HTTP endpoints are registered.
 
 ### Default ports
 

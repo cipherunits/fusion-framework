@@ -73,4 +73,19 @@ describe('cache', () => {
     await cache.aclear()
     assert.equal(await cache.aget('async-k'), null)
   })
+
+  it('snapshot and panelContext', () => {
+    cache.set('demo', { n: 1 })
+    const snap = cache.snapshot()
+    assert.equal(snap.driver, 'moka')
+    assert.equal(snap.entry_count, 1)
+    assert.equal(snap.entries[0].key, 'demo')
+    assert.equal(snap.events[0].op, 'set')
+
+    const ctx = cache.panelContext()
+    assert.equal(ctx.title, 'Cache Monitor')
+    assert.equal(ctx.empty_entries, false)
+    assert.equal(ctx.entry_rows[0][0], 'demo')
+    assert.match(String(ctx.json_path), /\/json$/)
+  })
 })

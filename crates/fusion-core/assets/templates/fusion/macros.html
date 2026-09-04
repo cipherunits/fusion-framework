@@ -34,9 +34,10 @@
 </span>
 {% endcomponent fusion.badge %}
 
-{# Data table. Pass headers/rows as arrays, and/or nest custom <tr> markup as the body. #}
-{% component fusion.table(headers: array = [], rows: array = [], caption: string = "") %}
-<div class="fusion-table-wrap">
+{# Data table. Pass headers/rows as arrays, and/or nest custom <tr> markup as the body.
+   Set page_size={10} to paginate the rows array client-side (0 = off). #}
+{% component fusion.table(headers: array = [], rows: array = [], caption: string = "", page_size: number = 0) %}
+<div class="fusion-table-wrap"{% if page_size > 0 %} data-page-size="{{ page_size }}"{% endif %}>
   <table class="fusion-table">
     {% if caption %}<caption>{{ caption }}</caption>{% endif %}
     {% if headers %}
@@ -48,12 +49,62 @@
     {% endif %}
     <tbody>
       {% for row in rows %}
-      <tr>
+      <tr{% if page_size > 0 %} data-fusion-row{% endif %}>
         {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
       </tr>
       {% endfor %}
       {{ body | safe }}
     </tbody>
   </table>
+  {% if page_size > 0 %}
+  <nav class="fusion-table-pager" aria-label="Table pagination" hidden>
+    <button type="button" class="fusion-btn fusion-btn--secondary fusion-table-pager__btn" data-fusion-prev>Previous</button>
+    <span class="fusion-table-pager__status" data-fusion-status></span>
+    <button type="button" class="fusion-btn fusion-btn--secondary fusion-table-pager__btn" data-fusion-next>Next</button>
+  </nav>
+  {% endif %}
 </div>
+{% if page_size > 0 %}
+<script>
+(function () {
+  var script = document.currentScript;
+  var wrap = script && script.previousElementSibling;
+  if (!wrap || !wrap.getAttribute) return;
+  var size = parseInt(wrap.getAttribute("data-page-size") || "0", 10);
+  if (!(size > 0)) return;
+  var rows = wrap.querySelectorAll("tbody tr[data-fusion-row]");
+  var pager = wrap.querySelector(".fusion-table-pager");
+  var status = wrap.querySelector("[data-fusion-status]");
+  var prev = wrap.querySelector("[data-fusion-prev]");
+  var next = wrap.querySelector("[data-fusion-next]");
+  if (!pager || !status || !prev || !next || rows.length === 0) return;
+  var page = 0;
+  var pages = Math.max(1, Math.ceil(rows.length / size));
+  function render() {
+    var start = page * size;
+    var end = start + size;
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].hidden = i < start || i >= end;
+    }
+    status.textContent = "Page " + (page + 1) + " / " + pages + " · " + rows.length + " rows";
+    prev.disabled = page <= 0;
+    next.disabled = page >= pages - 1;
+    pager.hidden = pages <= 1;
+  }
+  prev.addEventListener("click", function () {
+    if (page > 0) {
+      page -= 1;
+      render();
+    }
+  });
+  next.addEventListener("click", function () {
+    if (page < pages - 1) {
+      page += 1;
+      render();
+    }
+  });
+  render();
+})();
+</script>
+{% endif %}
 {% endcomponent fusion.table %}

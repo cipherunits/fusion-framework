@@ -17,6 +17,7 @@ from fusion_framework.middleware import (
 from fusion_framework.pagination import PaginationParams, paginated_body, parse_pagination
 from fusion_framework.template import FusionBaseTemplate, render_template
 from fusion_framework import cache
+from fusion_framework import tasks
 from . import header, status
 
 __all__ = [
@@ -24,6 +25,7 @@ __all__ = [
     "status",
     "header",
     "cache",
+    "tasks",
     "HTTPException",
     "bearer_jwt",
     "cache_headers",

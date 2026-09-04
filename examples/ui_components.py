@@ -1,4 +1,4 @@
-"""Render Fusion Tera UI components (button, badge, table).
+"""Render Fusion Tera UI components (button, badge, table + page_size).
 
     python examples/ui_components.py
 """
@@ -17,7 +17,12 @@ def main() -> None:
         "page.html",
         {
             "headers": ["Route", "Method"],
-            "rows": [["/v1/api/product", "GET"], ["/swagger", "GET"]],
+            "rows": [
+                ["/v1/api/product", "GET"],
+                ["/swagger", "GET"],
+                ["/__fusion/cache", "GET"],
+                ["/health", "GET"],
+            ],
         },
         templates_root=ROOT,
     )
