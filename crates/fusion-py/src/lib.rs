@@ -17,9 +17,11 @@ mod api_types;
 mod cache;
 mod json;
 mod pagination;
+mod tasks;
 
 use api_types::{PyFusionBaseApi, clear_registry, mount_routes, register_route};
 use cache::register_cache;
+use tasks::register_tasks;
 use json::{json_to_py, py_to_json};
 use pagination::register_pagination;
 
@@ -525,6 +527,7 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_has_unversioned_routes, m)?)?;
     register_pagination(m)?;
     register_cache(m)?;
+    register_tasks(m)?;
     m.add("HTTP_METHODS", HTTP_METHODS)?;
     add_status_module(m)?;
     add_header_module(m)?;

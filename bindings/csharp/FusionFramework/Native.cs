@@ -247,6 +247,34 @@ internal static class Native
     public static extern IntPtr fusion_cache_panel_context();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void FusionTaskCallback(IntPtr userData);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void FusionTaskDataFree(IntPtr userData);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_task_spawn(
+        FusionTaskCallback callback,
+        IntPtr userData,
+        FusionTaskDataFree freeData);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_task_spawn_after(
+        ulong delayMs,
+        FusionTaskCallback callback,
+        IntPtr userData,
+        FusionTaskDataFree freeData);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_task_cancel([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_task_status([MarshalAs(UnmanagedType.LPUTF8Str)] string id);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void fusion_task_reset();
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr FusionHandlerFn(
         IntPtr userData,
         IntPtr method,

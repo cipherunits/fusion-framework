@@ -51,6 +51,21 @@ export declare function cacheClear(): void
 export declare function cacheReset(): void
 export declare function cacheSnapshot(): unknown
 export declare function cachePanelContext(): unknown
+/**
+ * Spawn a JS function on the Tokio background runtime. Returns task id.
+ *
+ * Uses `call_async` so status becomes `done` only after the JS callback runs
+ * (sync `Blocking` can return before the Node event loop drains the TSFN).
+ */
+export declare function taskSpawn(callback: (...args: any[]) => any): string
+/** Spawn a JS function after `delay_ms` milliseconds. */
+export declare function taskSpawnAfter(delayMs: number, callback: (...args: any[]) => any): string
+/** Cancel a background task by id. */
+export declare function taskCancel(id: string): boolean
+/** Status string for a task id, or null if unknown. */
+export declare function taskStatus(id: string): string | null
+/** Reset the task registry (tests). */
+export declare function taskReset(): void
 export declare class Settings {
   constructor()
   loadJson(path?: string | undefined | null, envName?: string | undefined | null, extraRoots?: Array<string> | undefined | null): void

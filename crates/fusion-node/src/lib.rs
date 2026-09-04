@@ -10,7 +10,9 @@ use fusion_core::{
     render_template, resolve_route_path, response_from_value,
 };
 use napi::bindgen_prelude::*;
-use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use napi::threadsafe_function::{
+    ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction,
+};
 use napi::{JsFunction, ValueType};
 use napi_derive::napi;
 use serde_json::{Map, Number, Value as JsonValue};
@@ -557,4 +559,45 @@ pub fn cache_snapshot(env: Env) -> Result<Unknown> {
 pub fn cache_panel_context(env: Env) -> Result<Unknown> {
     let value = fusion_core::cache::panel_context().map_err(cache_err)?;
     json_to_js(&env, &value)
+}
+
+/// Spawn a JS function on the Tokio background runtime. Returns task id.
+///
+/// Uses `call_async` so status becomes `done` only after the JS callback runs
+/// (sync `Blocking` can return before the Node event loop drains the TSFN).
+#[napi]
+pub fn task_spawn(callback: JsFunction) -> Result<String> {
+    let tsfn: ThreadsafeFunction<(), ErrorStrategy::Fatal> = callback
+        .create_threadsafe_function(0, |_ctx: ThreadSafeCallContext<()>| Ok(Vec::<Unknown>::new()))?;
+    Ok(fusion_core::spawn_future(async move {
+        let _ = tsfn.call_async::<()>(()).await;
+    }))
+}
+
+/// Spawn a JS function after `delay_ms` milliseconds.
+#[napi]
+pub fn task_spawn_after(delay_ms: u32, callback: JsFunction) -> Result<String> {
+    let tsfn: ThreadsafeFunction<(), ErrorStrategy::Fatal> = callback
+        .create_threadsafe_function(0, |_ctx: ThreadSafeCallContext<()>| Ok(Vec::<Unknown>::new()))?;
+    Ok(fusion_core::spawn_after_ms_future(u64::from(delay_ms), async move {
+        let _ = tsfn.call_async::<()>(()).await;
+    }))
+}
+
+/// Cancel a background task by id.
+#[napi]
+pub fn task_cancel(id: String) -> bool {
+    fusion_core::task_cancel(&id)
+}
+
+/// Status string for a task id, or null if unknown.
+#[napi]
+pub fn task_status(id: String) -> Option<String> {
+    fusion_core::task_status(&id).map(|s| s.as_str().to_string())
+}
+
+/// Reset the task registry (tests).
+#[napi]
+pub fn task_reset() {
+    fusion_core::reset_tasks();
 }

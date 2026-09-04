@@ -1460,7 +1460,12 @@ class FusionApp {
     }
 
     const snapshot = getSettings()
-    const settingsReload = Boolean(snapshot.get('reload', false))
+    // getSettings() returns a plain {host,port,debug,env}; reload lives on the Settings handle.
+    const settingsReload = Boolean(
+      typeof snapshot.get === 'function'
+        ? snapshot.get('reload', false)
+        : settings.get('reload', false),
+    )
     const shouldReload =
       reloadArg === undefined || reloadArg === null ? settingsReload : Boolean(reloadArg)
 
@@ -1791,6 +1796,32 @@ const cache = {
   },
 }
 
+/** Process-wide Tokio background tasks. */
+const tasks = {
+  /** Run `fn` on the Tokio background runtime. Returns task id. */
+  spawn(fn) {
+    if (typeof fn !== 'function') throw new TypeError('callback must be a function')
+    return native.taskSpawn(fn)
+  },
+  /** Run `fn` after `delayMs` milliseconds. Returns task id. */
+  spawnAfter(delayMs, fn) {
+    if (typeof fn !== 'function') throw new TypeError('callback must be a function')
+    return native.taskSpawnAfter(Number(delayMs) || 0, fn)
+  },
+  /** Cancel a pending/running task. */
+  cancel(taskId) {
+    return native.taskCancel(String(taskId))
+  },
+  /** Status string, or null if unknown. */
+  status(taskId) {
+    return native.taskStatus(String(taskId))
+  },
+  /** Abort and clear all tracked tasks (tests). */
+  reset() {
+    native.taskReset()
+  },
+}
+
 const route = router
 
 module.exports = {
@@ -1834,6 +1865,7 @@ module.exports = {
   parsePagination,
   paginatedBody,
   cache,
+  tasks,
   renderTemplate,
   clearRouteRegistry,
   openapiSpec,
