@@ -1045,6 +1045,47 @@ function swaggerAssetUrl(prefix, name) {
   return `${prefix}/assets/${name}`
 }
 
+
+/** Normalize cache.monitor.path from settings. */
+function normalizeCacheMonitorPath(raw) {
+  let path = String(raw == null || raw === '' ? '/__fusion/cache' : raw).trim() || '/__fusion/cache'
+  if (!path.startsWith('/')) path = `/${path}`
+  return path.replace(/\/+$/, '') || '/__fusion/cache'
+}
+
+/**
+ * Built-in cache monitor (FusionBaseTemplate + fusion/cache_monitor.html).
+ * When cache.monitor.enabled is false, no routes are registered.
+ */
+function mountCacheMonitor(engine, settingsInstance) {
+  const s = settingsInstance || settings
+  if (!truthyEnabled(s.get('cache.monitor.enabled', false), false)) {
+    return false
+  }
+  cache.configure(s)
+  const path = normalizeCacheMonitorPath(s.get('cache.monitor.path', '/__fusion/cache'))
+
+  class CacheMonitorPanel extends FusionBaseTemplate {
+    static template = 'fusion/cache_monitor.html'
+    context() {
+      return cache.panelContext()
+    }
+  }
+
+  const htmlHandler = (errOrRequest, maybeRequest) => {
+    const request = nativeRequestArg(errOrRequest, maybeRequest)
+    return new CacheMonitorPanel(request || emptyRequest()).get()
+  }
+  const jsonHandler = () => cache.snapshot()
+
+  engine.route('GET', path, htmlHandler)
+  if (path !== '/') {
+    engine.route('GET', `${path}/`, htmlHandler)
+  }
+  engine.route('GET', `${path}/json`, jsonHandler)
+  return true
+}
+
 function mountSwaggerAssets(engine, prefix) {
   const assetsPrefix = `${prefix}/assets`
   for (const [name, { contentType, body }] of Object.entries(SWAGGER_ASSETS)) {
@@ -1394,6 +1435,8 @@ class FusionApp {
       }
     }
 
+    mountCacheMonitor(this.engine, settings)
+
     this.mounted = true
   }
 
@@ -1701,6 +1744,16 @@ const cache = {
   driver() {
     this._ensure()
     return native.cacheDriver()
+  },
+  /** Live entries + recent mutations (monitor JSON). */
+  snapshot() {
+    this._ensure()
+    return native.cacheSnapshot()
+  },
+  /** Template context for fusion/cache_monitor.html. */
+  panelContext() {
+    this._ensure()
+    return native.cachePanelContext()
   },
   reset() {
     native.cacheReset()

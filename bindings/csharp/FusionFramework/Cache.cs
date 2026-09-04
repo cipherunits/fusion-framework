@@ -119,6 +119,28 @@ public static class Cache
     /// <summary>Drop the global cache instance (tests).</summary>
     public static void Reset() => Native.fusion_cache_reset();
 
+    /// <summary>JSON snapshot of live entries and recent mutations (monitor).</summary>
+    public static JsonNode Snapshot()
+    {
+        Ensure();
+        var ptr = Native.fusion_cache_snapshot();
+        var json = Native.TakeUtf8(ptr);
+        if (string.IsNullOrEmpty(json))
+            throw new InvalidOperationException("cache snapshot failed");
+        return JsonNode.Parse(json) ?? new JsonObject();
+    }
+
+    /// <summary>Template context for the built-in <c>fusion/cache_monitor.html</c> panel.</summary>
+    public static JsonNode PanelContext()
+    {
+        Ensure();
+        var ptr = Native.fusion_cache_panel_context();
+        var json = Native.TakeUtf8(ptr);
+        if (string.IsNullOrEmpty(json))
+            throw new InvalidOperationException("cache panel_context failed");
+        return JsonNode.Parse(json) ?? new JsonObject();
+    }
+
     /// <summary>Async <see cref="Set"/>.</summary>
     public static Task SetAsync(string key, object? value, double? ttlSeconds = null) =>
         Task.Run(() => Set(key, value, ttlSeconds));

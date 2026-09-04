@@ -36,7 +36,7 @@ class FusionBaseTemplate(FusionBaseApi):
 
         {{<fusion.button label="Save" href="/save" variant="primary" />}}
         {{<fusion.badge label="Ready" variant="success" dot={true} />}}
-        {{<fusion.table headers={cols} rows={rows} />}}
+        {{<fusion.table headers={cols} rows={rows} page_size={10} />}}
 
     Include styles with ``{% include "fusion/components.css" %}`` or extend
     ``fusion/base.html``.

@@ -749,3 +749,27 @@ pub extern "C" fn fusion_cache_clear() -> c_int {
 pub extern "C" fn fusion_cache_reset() {
     fusion_core::cache::reset_global();
 }
+
+/// JSON snapshot of cache entries + recent events. Free with fusion_string_free.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_snapshot() -> *mut c_char {
+    match fusion_core::cache::snapshot() {
+        Ok(v) => value_to_cstring(&v),
+        Err(e) => {
+            eprintln!("fusion_cache_snapshot: {e}");
+            ptr::null_mut()
+        }
+    }
+}
+
+/// JSON template context for the built-in monitor panel. Free with fusion_string_free.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_panel_context() -> *mut c_char {
+    match fusion_core::cache::panel_context() {
+        Ok(v) => value_to_cstring(&v),
+        Err(e) => {
+            eprintln!("fusion_cache_panel_context: {e}");
+            ptr::null_mut()
+        }
+    }
+}

@@ -140,6 +140,18 @@ fn py_cache_reset() {
     cache::reset_global();
 }
 
+#[pyfunction(name = "cache_snapshot")]
+fn py_cache_snapshot(py: Python<'_>) -> PyResult<PyObject> {
+    let value = cache::snapshot().map_err(map_err)?;
+    json_to_py(py, &value)
+}
+
+#[pyfunction(name = "cache_panel_context")]
+fn py_cache_panel_context(py: Python<'_>) -> PyResult<PyObject> {
+    let value = cache::panel_context().map_err(map_err)?;
+    json_to_py(py, &value)
+}
+
 /// Register cache helpers on the `_fusion` native module.
 pub fn register_cache(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_cache_configure, m)?)?;
@@ -154,5 +166,7 @@ pub fn register_cache(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_cache_driver, m)?)?;
     m.add_function(wrap_pyfunction!(py_cache_clear, m)?)?;
     m.add_function(wrap_pyfunction!(py_cache_reset, m)?)?;
+    m.add_function(wrap_pyfunction!(py_cache_snapshot, m)?)?;
+    m.add_function(wrap_pyfunction!(py_cache_panel_context, m)?)?;
     Ok(())
 }

@@ -105,3 +105,40 @@ def test_async_get_or_set_async_factory():
         assert await cache.adelete("flag") is True
 
     asyncio.run(body())
+
+
+def test_snapshot_and_panel_context():
+    cache.set("demo", {"n": 1})
+    snap = cache.snapshot()
+    assert snap["driver"] == "moka"
+    assert snap["entry_count"] == 1
+    assert snap["entries"][0]["key"] == "demo"
+    assert snap["events"][0]["op"] == "set"
+
+    ctx = cache.panel_context()
+    assert ctx["title"] == "Cache Monitor"
+    assert ctx["empty_entries"] is False
+    assert ctx["entry_rows"][0][0] == "demo"
+    assert ctx["json_path"].endswith("/json")
+
+
+def test_mount_cache_monitor_respects_enabled_flag():
+    from fusion_framework._fusion import App, Settings
+    from fusion_framework.cache_monitor import mount_cache_monitor
+
+    settings_off = Settings()
+    settings_off.merge({"cache": {"monitor": {"enabled": False}}})
+    engine_off = App()
+    assert mount_cache_monitor(engine_off, settings_off) is False
+
+    settings_on = Settings()
+    settings_on.merge(
+        {
+            "cache": {
+                "driver": "moka",
+                "monitor": {"enabled": True, "path": "/__fusion/cache"},
+            }
+        }
+    )
+    engine_on = App()
+    assert mount_cache_monitor(engine_on, settings_on) is True

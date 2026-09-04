@@ -546,3 +546,15 @@ pub fn cache_clear() -> Result<()> {
 pub fn cache_reset() {
     fusion_core::cache::reset_global();
 }
+
+#[napi]
+pub fn cache_snapshot(env: Env) -> Result<Unknown> {
+    let value = fusion_core::cache::snapshot().map_err(cache_err)?;
+    json_to_js(&env, &value)
+}
+
+#[napi]
+pub fn cache_panel_context(env: Env) -> Result<Unknown> {
+    let value = fusion_core::cache::panel_context().map_err(cache_err)?;
+    json_to_js(&env, &value)
+}

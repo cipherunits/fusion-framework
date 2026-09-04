@@ -11,6 +11,8 @@ const BUILTIN_MACROS: &str = include_str!("../assets/templates/fusion/macros.htm
 const BUILTIN_BASE: &str = include_str!("../assets/templates/fusion/base.html");
 const BUILTIN_COMPONENTS_CSS: &str =
     include_str!("../assets/templates/fusion/components.css");
+const BUILTIN_CACHE_MONITOR: &str =
+    include_str!("../assets/templates/fusion/cache_monitor.html");
 
 static ENGINE_CACHE: Mutex<Option<EngineCache>> = Mutex::new(None);
 
@@ -63,6 +65,10 @@ fn build_engine(root: &Path) -> Result<Tera, String> {
         (
             "fusion/components.css".to_string(),
             BUILTIN_COMPONENTS_CSS.to_string(),
+        ),
+        (
+            "fusion/cache_monitor.html".to_string(),
+            BUILTIN_CACHE_MONITOR.to_string(),
         ),
     ];
 
@@ -131,7 +137,7 @@ pub fn builtin_components() -> HashMap<&'static str, &'static str> {
         ),
         (
             "table",
-            "{{<fusion.table headers={cols} rows={rows} caption=\"...\" />}}",
+            "{{<fusion.table headers={cols} rows={rows} caption=\"...\" page_size={10} />}}",
         ),
     ])
 }
@@ -193,6 +199,33 @@ mod tests {
         assert!(html.contains("<th scope=\"col\">Name</th>"));
         assert!(html.contains("<td>Widget</td>"));
         assert!(html.contains("Products"));
+        assert!(!html.contains("fusion-table-pager"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_table_with_page_size_pager() {
+        clear_template_cache();
+        let tpl =
+            r#"{{<fusion.table headers={headers} rows={rows} caption="Paged" page_size={2} />}}"#;
+        let dir = std::env::temp_dir().join("fusion_tpl_table_page_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.html"), tpl).unwrap();
+        let html = render_template(
+            "test.html",
+            &json!({
+                "headers": ["Name"],
+                "rows": [["a"], ["b"], ["c"]],
+            }),
+            &dir,
+        )
+        .unwrap();
+        assert!(html.contains("data-page-size=\"2\""));
+        assert!(html.contains("data-fusion-row"));
+        assert!(html.contains("fusion-table-pager"));
+        assert!(html.contains("data-fusion-prev"));
+        assert!(html.contains("data-fusion-next"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -225,6 +258,39 @@ mod tests {
         assert!(html.contains("fusion-card"));
         assert!(html.contains("Get started"));
         assert!(html.contains("hello"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_builtin_cache_monitor() {
+        clear_template_cache();
+        let dir = std::env::temp_dir().join("fusion_tpl_cache_monitor_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let html = render_template(
+            "fusion/cache_monitor.html",
+            &json!({
+                "title": "Cache Monitor",
+                "driver_label": "moka",
+                "entry_badge": "1 keys",
+                "event_badge": "2 events",
+                "empty_entries": false,
+                "empty_events": false,
+                "entry_headers": ["Key", "Value", "TTL (s)"],
+                "entry_rows": [["demo", "{\"ok\":true}", "∞"]],
+                "event_headers": ["Op", "Key", "Time (ms)"],
+                "event_rows": [["set", "demo", "1"]],
+                "path": "/__fusion/cache",
+                "json_path": "/__fusion/cache/json",
+            }),
+            &dir,
+        )
+        .unwrap();
+        assert!(html.contains("Cache Monitor"));
+        assert!(html.contains("fusion-table"));
+        assert!(html.contains("demo"));
+        // Builtin monitor uses page_size={10} on both tables.
+        assert!(html.contains("data-page-size=\"10\""));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

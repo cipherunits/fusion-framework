@@ -409,6 +409,9 @@ class FusionApp:
             swagger = _swagger_settings(self.settings)
             if swagger.get("enabled"):
                 _mount_swagger(self._engine, swagger)
+            from fusion_framework.cache_monitor import mount_cache_monitor
+
+            mount_cache_monitor(self._engine, self.settings)
             self._mounted = True
         host = host if host is not None else self.settings.host
         port = port if port is not None else self.settings.port

@@ -49,6 +49,8 @@ export declare function cacheExistsOrSet(key: string, value: JsJson, ttl?: numbe
 export declare function cacheDriver(): string
 export declare function cacheClear(): void
 export declare function cacheReset(): void
+export declare function cacheSnapshot(): unknown
+export declare function cachePanelContext(): unknown
 export declare class Settings {
   constructor()
   loadJson(path?: string | undefined | null, envName?: string | undefined | null, extraRoots?: Array<string> | undefined | null): void

@@ -1,5 +1,5 @@
 /**
- * Render Fusion Tera UI components (button, badge, table).
+ * Render Fusion Tera UI components (button, badge, table + page_size).
  *
  *   node examples/ui_components.mjs
  */
@@ -16,6 +16,8 @@ const html = renderTemplate(
     rows: [
       ['/v1/api/product', 'GET'],
       ['/swagger', 'GET'],
+      ['/__fusion/cache', 'GET'],
+      ['/health', 'GET'],
     ],
   },
   root,
