@@ -18,7 +18,7 @@ use serde_json::{Map, Number, Value as JsonValue};
 pub use settings::Settings;
 
 /// JSON extracted on the Node thread so the async result is `Send`.
-struct JsJson(JsonValue);
+pub struct JsJson(pub JsonValue);
 
 impl FromNapiValue for JsJson {
     unsafe fn from_napi_value(env: sys::napi_env, value: sys::napi_value) -> Result<Self> {
@@ -439,4 +439,110 @@ pub fn paginated_body(
     };
     let body = core_paginated_body(items_json, total as u64, &page);
     json_to_js(&env, &body)
+}
+
+fn cache_err(e: String) -> Error {
+    Error::from_reason(e)
+}
+
+fn ttl_secs(ttl: Option<f64>) -> Result<Option<std::time::Duration>> {
+    match ttl {
+        None => Ok(None),
+        Some(s) if s < 0.0 => Err(Error::from_reason("ttl must be >= 0")),
+        Some(s) => Ok(Some(std::time::Duration::from_secs_f64(s))),
+    }
+}
+
+/// Apply `cache.*` from a Settings instance to the process-wide cache.
+#[napi]
+pub fn cache_configure(settings: &Settings) -> Result<()> {
+    let guard = settings
+        .inner
+        .lock()
+        .map_err(|_| Error::from_reason("settings lock poisoned"))?;
+    fusion_core::cache::configure_from_settings(&guard).map_err(cache_err)
+}
+
+/// Install a driver explicitly (default moka).
+#[napi]
+pub fn cache_configure_driver(
+    driver: Option<String>,
+    max_capacity: Option<u32>,
+    default_ttl: Option<f64>,
+) -> Result<()> {
+    let mut cfg = fusion_core::cache::CacheConfig::default();
+    if let Some(d) = driver {
+        cfg.driver = d;
+    }
+    if let Some(cap) = max_capacity {
+        cfg.max_capacity = u64::from(cap).max(1);
+    }
+    if let Some(secs) = default_ttl {
+        cfg.default_ttl = Some(std::time::Duration::from_secs_f64(secs));
+    }
+    let instance = fusion_core::cache::Cache::open(cfg).map_err(cache_err)?;
+    fusion_core::cache::configure(instance);
+    Ok(())
+}
+
+#[napi]
+pub fn cache_set(key: String, value: JsJson, ttl: Option<f64>) -> Result<()> {
+    fusion_core::cache::set(&key, value.0, ttl_secs(ttl)?).map_err(cache_err)
+}
+
+#[napi]
+pub fn cache_get(env: Env, key: String) -> Result<Unknown> {
+    match fusion_core::cache::get(&key).map_err(cache_err)? {
+        Some(v) => json_to_js(&env, &v),
+        None => env.get_null().map(|n| n.into_unknown()),
+    }
+}
+
+#[napi]
+pub fn cache_delete(key: String) -> Result<bool> {
+    fusion_core::cache::delete(&key).map_err(cache_err)
+}
+
+#[napi]
+pub fn cache_exists(key: String) -> Result<bool> {
+    fusion_core::cache::exists(&key).map_err(cache_err)
+}
+
+#[napi]
+pub fn cache_get_or_set(env: Env, key: String, default: JsJson, ttl: Option<f64>) -> Result<Unknown> {
+    let value =
+        fusion_core::cache::get_or_set(&key, default.0, ttl_secs(ttl)?).map_err(cache_err)?;
+    json_to_js(&env, &value)
+}
+
+#[napi]
+pub fn cache_delete_or_set(
+    env: Env,
+    key: String,
+    value: JsJson,
+    ttl: Option<f64>,
+) -> Result<Unknown> {
+    let stored =
+        fusion_core::cache::delete_or_set(&key, value.0, ttl_secs(ttl)?).map_err(cache_err)?;
+    json_to_js(&env, &stored)
+}
+
+#[napi]
+pub fn cache_exists_or_set(key: String, value: JsJson, ttl: Option<f64>) -> Result<bool> {
+    fusion_core::cache::exists_or_set(&key, value.0, ttl_secs(ttl)?).map_err(cache_err)
+}
+
+#[napi]
+pub fn cache_driver() -> Result<String> {
+    fusion_core::cache::driver().map_err(cache_err)
+}
+
+#[napi]
+pub fn cache_clear() -> Result<()> {
+    fusion_core::cache::clear().map_err(cache_err)
+}
+
+#[napi]
+pub fn cache_reset() {
+    fusion_core::cache::reset_global();
 }

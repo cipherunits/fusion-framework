@@ -135,6 +135,21 @@ Use `prefix: "/"` when files should be served at the site root
 (`templates/home/a.png` → `/a.png`). Files are mounted as real routes on
 `FusionApp.Mount()` / `Listen()`.
 
+## Cache
+
+Process-wide cache (default driver **moka**). Configure via `cache` in `fusion.<env>.json`.
+
+```csharp
+Cache.Set("user:1", new { name = "Ada" }, ttlSeconds: 60);
+var value = Cache.Get("user:1");
+Cache.GetOrSet("counter", 1);
+Cache.ExistsOrSet("flag", true);
+Cache.DeleteOrSet("user:1", new { name = "Bob" });
+Cache.Clear();
+await Cache.SetAsync("user:2", new { name = "Ada" });
+await Cache.ClearAsync();
+```
+
 ## License
 
 BSD 3-Clause

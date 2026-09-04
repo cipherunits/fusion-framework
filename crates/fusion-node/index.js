@@ -1637,6 +1637,107 @@ function paginatedBody(items, total, params) {
   return native.paginatedBody(items, total, params)
 }
 
+/** Process-wide application cache (default driver: moka). */
+const cache = {
+  _ready: false,
+  _ensure() {
+    if (this._ready) return
+    try {
+      // Use the native Settings singleton (not getSettings()'s plain object).
+      settings.ensureLoaded([process.cwd()])
+      native.cacheConfigure(settings)
+      this._ready = true
+    } catch {
+      native.cacheConfigureDriver('moka', null, null)
+      this._ready = true
+    }
+  },
+  configure(settingsInstance) {
+    const s = settingsInstance || settings
+    if (s && typeof s.ensureLoaded === 'function') {
+      s.ensureLoaded([process.cwd()])
+    }
+    native.cacheConfigure(s)
+    this._ready = true
+  },
+  configureDriver(driver = 'moka', { maxCapacity, defaultTtl } = {}) {
+    native.cacheConfigureDriver(driver, maxCapacity ?? null, defaultTtl ?? null)
+    this._ready = true
+  },
+  set(key, value, ttl = null) {
+    this._ensure()
+    native.cacheSet(key, value, ttl)
+  },
+  get(key) {
+    this._ensure()
+    return native.cacheGet(key)
+  },
+  delete(key) {
+    this._ensure()
+    return native.cacheDelete(key)
+  },
+  exists(key) {
+    this._ensure()
+    return native.cacheExists(key)
+  },
+  getOrSet(key, defaultValue, ttl = null) {
+    this._ensure()
+    if (native.cacheExists(key)) return native.cacheGet(key)
+    const value = typeof defaultValue === 'function' ? defaultValue() : defaultValue
+    return native.cacheGetOrSet(key, value, ttl)
+  },
+  deleteOrSet(key, value, ttl = null) {
+    this._ensure()
+    return native.cacheDeleteOrSet(key, value, ttl)
+  },
+  existsOrSet(key, value, ttl = null) {
+    this._ensure()
+    return native.cacheExistsOrSet(key, value, ttl)
+  },
+  clear() {
+    this._ensure()
+    native.cacheClear()
+  },
+  driver() {
+    this._ensure()
+    return native.cacheDriver()
+  },
+  reset() {
+    native.cacheReset()
+    this._ready = false
+  },
+
+  /** Async set (Promise). */
+  async aset(key, value, ttl = null) {
+    this.set(key, value, ttl)
+  },
+  async aget(key) {
+    return this.get(key)
+  },
+  async adelete(key) {
+    return this.delete(key)
+  },
+  async aexists(key) {
+    return this.exists(key)
+  },
+  async agetOrSet(key, defaultValue, ttl = null) {
+    this._ensure()
+    if (native.cacheExists(key)) return native.cacheGet(key)
+    let value = typeof defaultValue === 'function' ? defaultValue() : defaultValue
+    if (value && typeof value.then === 'function') value = await value
+    return native.cacheGetOrSet(key, value, ttl)
+  },
+  async adeleteOrSet(key, value, ttl = null) {
+    return this.deleteOrSet(key, value, ttl)
+  },
+  async aexistsOrSet(key, value, ttl = null) {
+    return this.existsOrSet(key, value, ttl)
+  },
+  async aclear() {
+    this.clear()
+  },
+}
+
 const route = router
 
 module.exports = {
@@ -1679,6 +1780,7 @@ module.exports = {
   coerceParam,
   parsePagination,
   paginatedBody,
+  cache,
   renderTemplate,
   clearRouteRegistry,
   openapiSpec,

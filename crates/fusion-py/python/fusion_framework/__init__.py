@@ -16,12 +16,14 @@ from fusion_framework.middleware import (
 )
 from fusion_framework.pagination import PaginationParams, paginated_body, parse_pagination
 from fusion_framework.template import FusionBaseTemplate, render_template
+from fusion_framework import cache
 from . import header, status
 
 __all__ = [
     "settings",
     "status",
     "header",
+    "cache",
     "HTTPException",
     "bearer_jwt",
     "cache_headers",

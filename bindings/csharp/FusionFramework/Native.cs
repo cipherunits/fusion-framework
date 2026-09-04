@@ -192,6 +192,54 @@ internal static class Native
         [MarshalAs(UnmanagedType.LPUTF8Str)] string contextJson,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string? templatesRoot);
 
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_cache_configure(IntPtr settings);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_cache_ensure();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_cache_set(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string valueJson,
+        double ttlSecs);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_cache_get([MarshalAs(UnmanagedType.LPUTF8Str)] string key);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_cache_delete([MarshalAs(UnmanagedType.LPUTF8Str)] string key);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_cache_exists([MarshalAs(UnmanagedType.LPUTF8Str)] string key);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_cache_get_or_set(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string defaultJson,
+        double ttlSecs);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_cache_delete_or_set(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string valueJson,
+        double ttlSecs);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_cache_exists_or_set(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string key,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string valueJson,
+        double ttlSecs);
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_cache_driver();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern int fusion_cache_clear();
+
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern void fusion_cache_reset();
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr FusionHandlerFn(
         IntPtr userData,

@@ -45,6 +45,7 @@ New public surface → show usage in **Python + Node + C#**. Prefer the same bas
 | Custom HTTP | `@http_get("path/[action]")` | `httpGet('path/[action]')(proto.method)` | `[HttpGet("path/[action]")]` |
 | Middleware | `middleware.py` factories | factories in `index.js` | `Middleware.cs` |
 | Static files | `static_files()` | `staticFiles()` | `Middleware.StaticFiles()` |
+| Cache | `fusion_framework.cache` (moka) | `cache` export | `Cache` class |
 | Permissions | `permissions=` / `require_permissions` | `permissions` / `requirePermissions` | `PermissionTypes` / `RequirePermissions` |
 | OpenAPI / Swagger | `app.py` + `api_types.rs` | `buildOpenApi` in `index.js` | `Swagger.cs` |
 | Version navbar | per-version OpenAPI routes | same | same |

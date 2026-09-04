@@ -122,6 +122,7 @@ C# (`asp-core`): `main.cs`, `*.csproj` (`net10.0`), `[Route]` / `[HttpGet]`.
 - `FusionBaseApi` at `api/[module]` with `version="v1"` → `/v1/api/product/…`.
 - Convention verbs (`get` / `post` / …) plus one custom slot (`http_get` / `httpGet` / `[HttpGet]` with `[action]`).
 - Opt-in middleware list in `main` (e.g. `request_id`, `cors`, `cache_headers`, `security_headers`, `framework_headers`). Framework does **not** auto-enable middleware; the scaffold opts in.
+- Application cache defaults to **moka** (`cache` block in env JSON); see `fusion-cache` skill.
 
 ### Default ports
 

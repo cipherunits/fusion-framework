@@ -58,6 +58,15 @@ def load_settings_module(module: str | ModuleType = "settings") -> Settings:
     if extras:
         settings.merge(extras)
 
+    # Apply cache.* from the loaded env JSON (default driver: moka).
+    try:
+        from fusion_framework.cache import configure as configure_cache
+
+        configure_cache(settings)
+    except Exception:
+        # Cache is optional at import time; first use will ensure_configured.
+        pass
+
     return settings
 
 
