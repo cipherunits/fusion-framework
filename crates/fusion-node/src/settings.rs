@@ -10,7 +10,7 @@ use crate::{js_to_json, json_to_js};
 
 #[napi]
 pub struct Settings {
-    inner: Mutex<CoreSettings>,
+    pub(crate) inner: Mutex<CoreSettings>,
 }
 
 #[napi]

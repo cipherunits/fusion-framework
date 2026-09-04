@@ -20,4 +20,5 @@ bytes = { workspace = true }
 http = { workspace = true }
 serde_json = { workspace = true }
 tera = {version = "2", features = ["fast"]}
+moka = { version = "0.12", features = ["sync"] }
 console = "0.16.4"

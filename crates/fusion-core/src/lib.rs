@@ -1,4 +1,5 @@
 mod api_context;
+pub mod cache;
 mod coerce;
 mod dispatch;
 mod error;
@@ -17,6 +18,13 @@ mod status;
 mod templates;
 
 pub use api_context::ApiContext;
+pub use cache::{
+    Cache, CacheConfig, DEFAULT_DRIVER, clear as cache_clear, configure as configure_cache,
+    configure_from_settings as configure_cache_from_settings, delete as cache_delete,
+    delete_or_set as cache_delete_or_set, driver as cache_driver, ensure_configured as ensure_cache,
+    exists as cache_exists, exists_or_set as cache_exists_or_set, get as cache_get,
+    get_or_set as cache_get_or_set, reset_global as reset_cache, set as cache_set,
+};
 pub use coerce::{ParamKind, coerce_param, param_kind_from_name};
 pub use dispatch::{BODY_METHODS, ParamSpec, bind_args, build_response, parse_json_object};
 pub use error::{Error, Result};

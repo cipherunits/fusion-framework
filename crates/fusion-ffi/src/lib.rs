@@ -16,6 +16,7 @@ use fusion_core::{
     location, render_template, resolve_route_path, response_from_value,
 };
 use serde_json::{Map, Value};
+use std::time::Duration;
 
 /// Opaque application handle.
 pub struct FusionAppHandle {
@@ -559,4 +560,192 @@ pub extern "C" fn fusion_render_template(
             ptr::null_mut()
         }
     }
+}
+
+fn parse_json_value(raw: &str) -> Value {
+    if raw.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_str(raw).unwrap_or(Value::Null)
+    }
+}
+
+fn ttl_opt(ttl_secs: f64) -> Option<Duration> {
+    // Use -1.0 to mean "no explicit TTL" (fall back to cache default).
+    if ttl_secs < 0.0 {
+        None
+    } else {
+        Some(Duration::from_secs_f64(ttl_secs))
+    }
+}
+
+fn value_to_cstring(v: &Value) -> *mut c_char {
+    to_cstring(&serde_json::to_string(v).unwrap_or_else(|_| "null".into()))
+}
+
+/// Configure process-wide cache from a settings handle (`cache.*`).
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_configure(settings: *const FusionSettingsHandle) -> c_int {
+    if settings.is_null() {
+        return -1;
+    }
+    let settings = unsafe { &*settings };
+    match fusion_core::cache::configure_from_settings(&settings.settings) {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("fusion_cache_configure: {e}");
+            -1
+        }
+    }
+}
+
+/// Ensure a default moka cache exists.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_ensure() -> c_int {
+    match fusion_core::cache::ensure_configured() {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("fusion_cache_ensure: {e}");
+            -1
+        }
+    }
+}
+
+/// Store JSON value. `ttl_secs < 0` uses the configured default TTL.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_set(
+    key: *const c_char,
+    value_json: *const c_char,
+    ttl_secs: f64,
+) -> c_int {
+    let key = cstr_to_str(key);
+    if key.is_empty() {
+        return -1;
+    }
+    let value = parse_json_value(cstr_to_str(value_json));
+    match fusion_core::cache::set(key, value, ttl_opt(ttl_secs)) {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("fusion_cache_set: {e}");
+            -1
+        }
+    }
+}
+
+/// Get JSON value or null pointer when missing. Free with fusion_string_free.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_get(key: *const c_char) -> *mut c_char {
+    let key = cstr_to_str(key);
+    match fusion_core::cache::get(key) {
+        Ok(Some(v)) => value_to_cstring(&v),
+        Ok(None) => ptr::null_mut(),
+        Err(e) => {
+            eprintln!("fusion_cache_get: {e}");
+            ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_delete(key: *const c_char) -> c_int {
+    match fusion_core::cache::delete(cstr_to_str(key)) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(e) => {
+            eprintln!("fusion_cache_delete: {e}");
+            -1
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_exists(key: *const c_char) -> c_int {
+    match fusion_core::cache::exists(cstr_to_str(key)) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(e) => {
+            eprintln!("fusion_cache_exists: {e}");
+            -1
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_get_or_set(
+    key: *const c_char,
+    default_json: *const c_char,
+    ttl_secs: f64,
+) -> *mut c_char {
+    let key = cstr_to_str(key);
+    let default = parse_json_value(cstr_to_str(default_json));
+    match fusion_core::cache::get_or_set(key, default, ttl_opt(ttl_secs)) {
+        Ok(v) => value_to_cstring(&v),
+        Err(e) => {
+            eprintln!("fusion_cache_get_or_set: {e}");
+            ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_delete_or_set(
+    key: *const c_char,
+    value_json: *const c_char,
+    ttl_secs: f64,
+) -> *mut c_char {
+    let key = cstr_to_str(key);
+    let value = parse_json_value(cstr_to_str(value_json));
+    match fusion_core::cache::delete_or_set(key, value, ttl_opt(ttl_secs)) {
+        Ok(v) => value_to_cstring(&v),
+        Err(e) => {
+            eprintln!("fusion_cache_delete_or_set: {e}");
+            ptr::null_mut()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_exists_or_set(
+    key: *const c_char,
+    value_json: *const c_char,
+    ttl_secs: f64,
+) -> c_int {
+    let key = cstr_to_str(key);
+    let value = parse_json_value(cstr_to_str(value_json));
+    match fusion_core::cache::exists_or_set(key, value, ttl_opt(ttl_secs)) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(e) => {
+            eprintln!("fusion_cache_exists_or_set: {e}");
+            -1
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_driver() -> *mut c_char {
+    match fusion_core::cache::driver() {
+        Ok(d) => to_cstring(&d),
+        Err(e) => {
+            eprintln!("fusion_cache_driver: {e}");
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Clear all entries from the process-wide cache.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_clear() -> c_int {
+    match fusion_core::cache::clear() {
+        Ok(()) => 0,
+        Err(e) => {
+            eprintln!("fusion_cache_clear: {e}");
+            -1
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_cache_reset() {
+    fusion_core::cache::reset_global();
 }

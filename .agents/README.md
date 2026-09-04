@@ -22,6 +22,7 @@ Each skill teaches domain-specific workflows for Fusion (Rust core + Python / No
 | `fusion-http-routes` | Routes, `http_get` / `[HttpGet]`, `[module]`, `[action]`, Swagger |
 | `fusion-release` | Version bumps, manifests, publish prep |
 | `fusion-testing` | Running checks; investigating failed tests |
+| `fusion-cache` | Application cache (moka default; Redis later) |
 
 ## Always-on rules
 
