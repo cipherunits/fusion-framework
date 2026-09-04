@@ -1046,27 +1046,45 @@ function swaggerAssetUrl(prefix, name) {
 }
 
 
-/** Normalize cache.monitor.path from settings. */
-function normalizeCacheMonitorPath(raw) {
-  let path = String(raw == null || raw === '' ? '/__fusion/cache' : raw).trim() || '/__fusion/cache'
+/** Normalize monitor.path from settings (default /__fusion/monitor). */
+function normalizeMonitorPath(raw) {
+  let path = String(raw == null || raw === '' ? '/__fusion/monitor' : raw).trim() || '/__fusion/monitor'
   if (!path.startsWith('/')) path = `/${path}`
-  return path.replace(/\/+$/, '') || '/__fusion/cache'
+  return path.replace(/\/+$/, '') || '/__fusion/monitor'
+}
+
+function resolveMonitorEnabled(settingsInstance) {
+  const s = settingsInstance || settings
+  const top = s.get('monitor.enabled', null)
+  if (top !== null && top !== undefined) {
+    return truthyEnabled(top, false)
+  }
+  return truthyEnabled(s.get('cache.monitor.enabled', false), false)
+}
+
+function resolveMonitorPath(settingsInstance) {
+  const s = settingsInstance || settings
+  const top = s.get('monitor.path', null)
+  if (top !== null && top !== undefined && String(top).trim() !== '') {
+    return normalizeMonitorPath(top)
+  }
+  return normalizeMonitorPath(s.get('cache.monitor.path', '/__fusion/monitor'))
 }
 
 /**
- * Built-in cache monitor (FusionBaseTemplate + fusion/cache_monitor.html).
- * When cache.monitor.enabled is false, no routes are registered.
+ * Built-in Fusion monitor (cache + background tasks).
+ * When monitor.enabled is false, no routes are registered.
  */
-function mountCacheMonitor(engine, settingsInstance) {
+function mountMonitor(engine, settingsInstance) {
   const s = settingsInstance || settings
-  if (!truthyEnabled(s.get('cache.monitor.enabled', false), false)) {
+  if (!resolveMonitorEnabled(s)) {
     return false
   }
   cache.configure(s)
-  const path = normalizeCacheMonitorPath(s.get('cache.monitor.path', '/__fusion/cache'))
+  const path = resolveMonitorPath(s)
 
-  class CacheMonitorPanel extends FusionBaseTemplate {
-    static template = 'fusion/cache_monitor.html'
+  class MonitorPanel extends FusionBaseTemplate {
+    static template = 'fusion/monitor.html'
     context() {
       return cache.panelContext()
     }
@@ -1074,7 +1092,7 @@ function mountCacheMonitor(engine, settingsInstance) {
 
   const htmlHandler = (errOrRequest, maybeRequest) => {
     const request = nativeRequestArg(errOrRequest, maybeRequest)
-    return new CacheMonitorPanel(request || emptyRequest()).get()
+    return new MonitorPanel(request || emptyRequest()).get()
   }
   const jsonHandler = () => cache.snapshot()
 
@@ -1085,6 +1103,9 @@ function mountCacheMonitor(engine, settingsInstance) {
   engine.route('GET', `${path}/json`, jsonHandler)
   return true
 }
+
+/** @deprecated Use mountMonitor */
+const mountCacheMonitor = mountMonitor
 
 function mountSwaggerAssets(engine, prefix) {
   const assetsPrefix = `${prefix}/assets`
@@ -1435,7 +1456,7 @@ class FusionApp {
       }
     }
 
-    mountCacheMonitor(this.engine, settings)
+    mountMonitor(this.engine, settings)
 
     this.mounted = true
   }
@@ -1816,6 +1837,10 @@ const tasks = {
   status(taskId) {
     return native.taskStatus(String(taskId))
   },
+  /** JSON snapshot of tracked tasks (also under cache.snapshot().tasks). */
+  snapshot() {
+    return native.taskSnapshot()
+  },
   /** Abort and clear all tracked tasks (tests). */
   reset() {
     native.taskReset()
@@ -1866,6 +1891,8 @@ module.exports = {
   paginatedBody,
   cache,
   tasks,
+  mountMonitor,
+  mountCacheMonitor,
   renderTemplate,
   clearRouteRegistry,
   openapiSpec,

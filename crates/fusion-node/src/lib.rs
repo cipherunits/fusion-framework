@@ -601,3 +601,9 @@ pub fn task_status(id: String) -> Option<String> {
 pub fn task_reset() {
     fusion_core::reset_tasks();
 }
+
+/// JSON snapshot of tracked background tasks.
+#[napi]
+pub fn task_snapshot(env: Env) -> Result<Unknown> {
+    json_to_js(&env, &fusion_core::task_snapshot())
+}

@@ -6,6 +6,7 @@ mod error;
 mod handler;
 mod headers;
 mod http_error;
+pub mod monitor;
 mod naming;
 mod pagination;
 mod request;
@@ -47,12 +48,13 @@ pub use response::Response;
 pub use router::Router;
 pub use serialize::{is_response_envelope, response_from_value};
 pub use settings::Settings;
+pub use monitor::{MonitorConfig, DEFAULT_PATH as MONITOR_DEFAULT_PATH};
 pub use status::{
     HTTP_STATUS_CODES, is_client_error, is_informational, is_redirect, is_server_error, is_success,
 };
 pub use tasks::{
-    TaskStatus, cancel as task_cancel, reset_for_tests as reset_tasks, spawn_after_ms,
-    spawn_after_ms_future, spawn_fn, spawn_future, status as task_status,
+    TaskStatus, cancel as task_cancel, reset_for_tests as reset_tasks, snapshot as task_snapshot,
+    spawn_after_ms, spawn_after_ms_future, spawn_fn, spawn_future, status as task_status,
 };
 pub use templates::{builtin_components, clear_template_cache, render_template};
 

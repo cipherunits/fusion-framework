@@ -66,6 +66,8 @@ export declare function taskCancel(id: string): boolean
 export declare function taskStatus(id: string): string | null
 /** Reset the task registry (tests). */
 export declare function taskReset(): void
+/** JSON snapshot of tracked background tasks. */
+export declare function taskSnapshot(): unknown
 export declare class Settings {
   constructor()
   loadJson(path?: string | undefined | null, envName?: string | undefined | null, extraRoots?: Array<string> | undefined | null): void

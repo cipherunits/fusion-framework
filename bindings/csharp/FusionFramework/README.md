@@ -156,6 +156,7 @@ var id = BackgroundTasks.Spawn(() => Console.WriteLine("done"));
 BackgroundTasks.SpawnAfter(1000, () => Console.WriteLine("later"));
 BackgroundTasks.Cancel(id);
 BackgroundTasks.Status(id); // pending|running|done|cancelled|failed
+BackgroundTasks.Snapshot(); // also under Cache.Snapshot()["tasks"]
 ```
 ```
 

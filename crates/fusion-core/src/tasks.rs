@@ -6,10 +6,14 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use serde_json::{json, Value};
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
+
+/// How many terminal (done/cancelled/failed) tasks to retain for the monitor.
+const MAX_TERMINAL_RETAINED: usize = 100;
 
 /// Lifecycle of a background task.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +57,11 @@ impl TaskStatus {
         }
     }
 
+    /// Whether the task is still scheduled or executing.
+    fn is_active(self) -> bool {
+        matches!(self, Self::Pending | Self::Running)
+    }
+
     /// Parse a status name (case-insensitive).
     pub fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
@@ -69,6 +78,8 @@ impl TaskStatus {
 struct TaskEntry {
     status: Arc<AtomicU8>,
     handle: JoinHandle<()>,
+    created_at_ms: u64,
+    delay_ms: Option<u64>,
 }
 
 struct TaskRegistry {
@@ -90,6 +101,13 @@ impl TaskRegistry {
     }
 }
 
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 fn runtime() -> &'static Runtime {
     static RT: OnceLock<Runtime> = OnceLock::new();
     RT.get_or_init(|| {
@@ -105,6 +123,29 @@ fn runtime() -> &'static Runtime {
 fn registry() -> &'static TaskRegistry {
     static REG: OnceLock<TaskRegistry> = OnceLock::new();
     REG.get_or_init(TaskRegistry::new)
+}
+
+/// Drop oldest terminal tasks so the registry cannot grow without bound.
+fn prune_terminal(entries: &mut HashMap<String, TaskEntry>) {
+    let mut terminal: Vec<(String, u64)> = entries
+        .iter()
+        .filter_map(|(id, e)| {
+            let st = TaskStatus::from_u8(e.status.load(Ordering::SeqCst));
+            if st.is_active() {
+                None
+            } else {
+                Some((id.clone(), e.created_at_ms))
+            }
+        })
+        .collect();
+    if terminal.len() <= MAX_TERMINAL_RETAINED {
+        return;
+    }
+    terminal.sort_by_key(|(_, created)| *created);
+    let remove_n = terminal.len() - MAX_TERMINAL_RETAINED;
+    for (id, _) in terminal.into_iter().take(remove_n) {
+        entries.remove(&id);
+    }
 }
 
 /// Spawn a job immediately on the background Tokio runtime. Returns task id.
@@ -138,6 +179,8 @@ fn spawn_inner(delay: Option<Duration>, job: Box<dyn FnOnce() + Send + 'static>)
     let id = reg.alloc_id();
     let status = Arc::new(AtomicU8::new(TaskStatus::Pending.as_u8()));
     let status_run = Arc::clone(&status);
+    let created_at_ms = now_ms();
+    let delay_ms = delay.map(|d| d.as_millis() as u64);
 
     let Ok(mut guard) = reg.entries.lock() else {
         let _ = runtime().spawn(async move {
@@ -171,7 +214,16 @@ fn spawn_inner(delay: Option<Duration>, job: Box<dyn FnOnce() + Send + 'static>)
         );
     });
 
-    guard.insert(id.clone(), TaskEntry { status, handle });
+    guard.insert(
+        id.clone(),
+        TaskEntry {
+            status,
+            handle,
+            created_at_ms,
+            delay_ms,
+        },
+    );
+    prune_terminal(&mut guard);
     id
 }
 
@@ -183,6 +235,8 @@ where
     let id = reg.alloc_id();
     let status = Arc::new(AtomicU8::new(TaskStatus::Pending.as_u8()));
     let status_run = Arc::clone(&status);
+    let created_at_ms = now_ms();
+    let delay_ms = delay.map(|d| d.as_millis() as u64);
 
     let Ok(mut guard) = reg.entries.lock() else {
         let _ = runtime().spawn(async move {
@@ -212,7 +266,16 @@ where
         );
     });
 
-    guard.insert(id.clone(), TaskEntry { status, handle });
+    guard.insert(
+        id.clone(),
+        TaskEntry {
+            status,
+            handle,
+            created_at_ms,
+            delay_ms,
+        },
+    );
+    prune_terminal(&mut guard);
     id
 }
 
@@ -236,6 +299,7 @@ pub fn cancel(id: &str) -> bool {
         .status
         .store(TaskStatus::Cancelled.as_u8(), Ordering::SeqCst);
     entry.handle.abort();
+    prune_terminal(&mut guard);
     true
 }
 
@@ -246,6 +310,54 @@ pub fn status(id: &str) -> Option<TaskStatus> {
     guard
         .get(id)
         .map(|e| TaskStatus::from_u8(e.status.load(Ordering::SeqCst)))
+}
+
+/// JSON snapshot of tracked tasks (for the cache monitor panel and bindings).
+pub fn snapshot() -> Value {
+    let reg = registry();
+    let Ok(mut guard) = reg.entries.lock() else {
+        return json!({
+            "task_count": 0,
+            "active_count": 0,
+            "tasks": [],
+        });
+    };
+    prune_terminal(&mut guard);
+
+    let mut tasks: Vec<Value> = guard
+        .iter()
+        .map(|(id, e)| {
+            let st = TaskStatus::from_u8(e.status.load(Ordering::SeqCst));
+            json!({
+                "id": id,
+                "status": st.as_str(),
+                "delay_ms": e.delay_ms,
+                "created_at_ms": e.created_at_ms,
+            })
+        })
+        .collect();
+    // Newest first for the monitor table.
+    tasks.sort_by(|a, b| {
+        let am = a["created_at_ms"].as_u64().unwrap_or(0);
+        let bm = b["created_at_ms"].as_u64().unwrap_or(0);
+        bm.cmp(&am)
+    });
+
+    let active_count = tasks
+        .iter()
+        .filter(|t| {
+            matches!(
+                t["status"].as_str(),
+                Some("pending") | Some("running")
+            )
+        })
+        .count();
+
+    json!({
+        "task_count": tasks.len(),
+        "active_count": active_count,
+        "tasks": tasks,
+    })
 }
 
 /// Drop all tracked tasks (tests). Running jobs are aborted.
@@ -328,5 +440,25 @@ mod tests {
         thread::sleep(Duration::from_millis(100));
         assert!(!flag.load(Ordering::SeqCst));
         assert_eq!(status(&id), Some(TaskStatus::Cancelled));
+    }
+
+    #[test]
+    fn snapshot_lists_spawned_and_cancelled() {
+        let _guard = test_lock();
+        reset_for_tests();
+        let id = spawn_after_ms(5_000, || {});
+        let snap = snapshot();
+        assert_eq!(snap["task_count"].as_u64(), Some(1));
+        assert_eq!(snap["active_count"].as_u64(), Some(1));
+        let tasks = snap["tasks"].as_array().expect("tasks array");
+        assert_eq!(tasks[0]["id"].as_str(), Some(id.as_str()));
+        assert_eq!(tasks[0]["status"].as_str(), Some("pending"));
+        assert_eq!(tasks[0]["delay_ms"].as_u64(), Some(5_000));
+        assert!(tasks[0]["created_at_ms"].as_u64().unwrap_or(0) > 0);
+
+        assert!(cancel(&id));
+        let snap2 = snapshot();
+        assert_eq!(snap2["tasks"][0]["status"].as_str(), Some("cancelled"));
+        assert_eq!(snap2["active_count"].as_u64(), Some(0));
     }
 }

@@ -4,12 +4,16 @@ use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 
-use fusion_core::{reset_tasks, spawn_after_ms, spawn_fn, task_cancel, task_status};
+use fusion_core::{reset_tasks, spawn_after_ms, spawn_fn, task_cancel, task_snapshot, task_status};
+
+use crate::json::json_to_py;
 
 #[pyfunction(name = "task_spawn")]
 fn py_task_spawn(callback: Bound<'_, PyAny>) -> PyResult<String> {
     if !callback.is_callable() {
-        return Err(PyTypeError::new_err("callback must be callable"));
+        return Err(PyTypeError::new_err(
+            "callback must be callable; use tasks.spawn(lambda: work(arg)) not tasks.spawn(work(arg))",
+        ));
     }
     let cb = callback.unbind();
     Ok(spawn_fn(move || {
@@ -29,7 +33,9 @@ fn py_task_spawn_after(
     callback: Bound<'_, PyAny>,
 ) -> PyResult<String> {
     if !callback.is_callable() {
-        return Err(PyTypeError::new_err("callback must be callable"));
+        return Err(PyTypeError::new_err(
+            "callback must be callable; use tasks.spawn(lambda: work(arg)) not tasks.spawn(work(arg))",
+        ));
     }
     let _ = py;
     let cb = callback.unbind();
@@ -54,6 +60,12 @@ fn py_task_status(id: &str) -> Option<String> {
     task_status(id).map(|s| s.as_str().to_string())
 }
 
+/// JSON snapshot of tracked background tasks.
+#[pyfunction(name = "task_snapshot")]
+fn py_task_snapshot(py: Python<'_>) -> PyResult<PyObject> {
+    json_to_py(py, &task_snapshot())
+}
+
 /// Reset the task registry (tests).
 #[pyfunction(name = "task_reset")]
 fn py_task_reset() {
@@ -66,6 +78,7 @@ pub fn register_tasks(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_task_spawn_after, m)?)?;
     m.add_function(wrap_pyfunction!(py_task_cancel, m)?)?;
     m.add_function(wrap_pyfunction!(py_task_status, m)?)?;
+    m.add_function(wrap_pyfunction!(py_task_snapshot, m)?)?;
     m.add_function(wrap_pyfunction!(py_task_reset, m)?)?;
     Ok(())
 }

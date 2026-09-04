@@ -9,22 +9,16 @@
 //!   "driver": "moka",
 //!   "max_capacity": 10000,
 //!   "default_ttl": null,
-//!   "connection_string": null,
-//!   "host": "127.0.0.1",
-//!   "port": 6379,
-//!   "username": null,
-//!   "password": null,
-//!   "db": 0,
-//!   "monitor": {
-//!     "enabled": true,
-//!     "path": "/__fusion/cache",
-//!     "max_events": 50
-//!   }
+//!   "max_events": 50
+//! },
+//! "monitor": {
+//!   "enabled": true,
+//!   "path": "/__fusion/monitor"
 //! }
 //! ```
 //!
-//! When ``cache.monitor.enabled`` is false, bindings must not register the
-//! monitor HTML/JSON routes (security: disable endpoints, not only UI).
+//! The HTML/JSON panel is gated by top-level ``monitor.enabled`` (see
+//! [`crate::monitor`]). Legacy ``cache.monitor.*`` is still accepted.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
@@ -68,12 +62,8 @@ pub struct CacheConfig {
     pub username: Option<String>,
     pub password: Option<String>,
     pub db: Option<u64>,
-    /// Built-in cache monitor panel (HTML + JSON). Off = no routes mounted.
-    pub monitor_enabled: bool,
-    /// URL path for the monitor UI (JSON at ``{path}/json``).
-    pub monitor_path: String,
     /// Ring-buffer size for recent set/delete/clear events.
-    pub monitor_max_events: usize,
+    pub max_events: usize,
 }
 
 impl Default for CacheConfig {
@@ -89,9 +79,7 @@ impl Default for CacheConfig {
             username: None,
             password: None,
             db: None,
-            monitor_enabled: false,
-            monitor_path: "/__fusion/cache".into(),
-            monitor_max_events: 50,
+            max_events: 50,
         }
     }
 }
@@ -123,45 +111,20 @@ impl CacheConfig {
         cfg.username = settings.get_str("cache.username");
         cfg.password = settings.get_str("cache.password");
         cfg.db = settings.get_u64("cache.db");
-        cfg.monitor_enabled = settings
-            .get_bool("cache.monitor.enabled")
-            .unwrap_or(false);
-        if let Some(path) = settings.get_str("cache.monitor.path") {
-            let trimmed = path.trim();
-            if !trimmed.is_empty() {
-                cfg.monitor_path = if trimmed.starts_with('/') {
-                    trimmed.to_string()
-                } else {
-                    format!("/{trimmed}")
-                };
-            }
-        }
-        if let Some(n) = settings.get_u64("cache.monitor.max_events") {
-            cfg.monitor_max_events = (n as usize).clamp(1, 10_000);
+        // Prefer cache.max_events; legacy cache.monitor.max_events still works.
+        if let Some(n) = settings
+            .get_u64("cache.max_events")
+            .or_else(|| settings.get_u64("cache.monitor.max_events"))
+        {
+            cfg.max_events = (n as usize).clamp(1, 10_000);
         }
         cfg
     }
 }
 
-/// Monitor panel settings derived from ``cache.monitor.*``.
-#[derive(Debug, Clone)]
-pub struct MonitorConfig {
-    pub enabled: bool,
-    pub path: String,
-    pub max_events: usize,
-}
-
-impl MonitorConfig {
-    /// Read monitor settings (does not open a cache).
-    pub fn from_settings(settings: &Settings) -> Self {
-        let cfg = CacheConfig::from_settings(settings);
-        Self {
-            enabled: cfg.monitor_enabled,
-            path: cfg.monitor_path,
-            max_events: cfg.monitor_max_events,
-        }
-    }
-}
+/// Deprecated alias: prefer [`crate::monitor::MonitorConfig`].
+#[deprecated(note = "use fusion_core::monitor::MonitorConfig")]
+pub type MonitorConfig = crate::monitor::MonitorConfig;
 
 fn now_unix_ms() -> u64 {
     SystemTime::now()
@@ -194,8 +157,6 @@ pub struct Cache {
     driver: String,
     events: Arc<Mutex<VecDeque<CacheEvent>>>,
     max_events: usize,
-    monitor_enabled: bool,
-    monitor_path: String,
 }
 
 trait CacheBackend: Send + Sync {
@@ -279,9 +240,7 @@ impl Cache {
             default_ttl: config.default_ttl,
             driver,
             events: Arc::new(Mutex::new(VecDeque::new())),
-            max_events: config.monitor_max_events.max(1),
-            monitor_enabled: config.monitor_enabled,
-            monitor_path: config.monitor_path,
+            max_events: config.max_events.max(1),
         })
     }
 
@@ -373,17 +332,19 @@ impl Cache {
         self.record("clear", None);
     }
 
-    /// Whether the built-in monitor should be mounted for this cache.
+    /// Whether the Fusion monitor is enabled (from top-level ``monitor`` settings).
     pub fn monitor_enabled(&self) -> bool {
-        self.monitor_enabled
+        let _ = self;
+        crate::monitor::enabled()
     }
 
-    /// Monitor UI path (JSON lives at ``{path}/json``).
-    pub fn monitor_path(&self) -> &str {
-        &self.monitor_path
+    /// Monitor UI path (from top-level ``monitor`` settings).
+    pub fn monitor_path(&self) -> String {
+        let _ = self;
+        crate::monitor::path()
     }
 
-    /// JSON snapshot for the monitor panel (entries + recent events).
+    /// JSON snapshot for the monitor panel (entries + recent events + tasks).
     pub fn snapshot(&self) -> Value {
         let entries: Vec<Value> = self
             .inner
@@ -415,24 +376,28 @@ impl Cache {
                     .collect()
             })
             .unwrap_or_default();
+        let mon = crate::monitor::current();
+        let tasks = crate::tasks::snapshot();
         json!({
             "driver": self.driver,
             "entry_count": entries.len(),
             "event_count": events.len(),
             "entries": entries,
             "events": events,
+            "tasks": tasks,
             "monitor": {
-                "enabled": self.monitor_enabled,
-                "path": self.monitor_path,
+                "enabled": mon.enabled,
+                "path": mon.path,
             }
         })
     }
 
-    /// Template context for the built-in cache monitor panel.
+    /// Template context for the Fusion monitor panel (cache + background tasks).
     pub fn panel_context(&self) -> Value {
         let snap = self.snapshot();
         let entries = snap["entries"].as_array().cloned().unwrap_or_default();
         let events = snap["events"].as_array().cloned().unwrap_or_default();
+        let tasks = snap["tasks"]["tasks"].as_array().cloned().unwrap_or_default();
         let entry_rows: Vec<Value> = entries
             .iter()
             .map(|e| {
@@ -461,28 +426,47 @@ impl Cache {
                 json!([op, key, at])
             })
             .collect();
-        let path = self.monitor_path.trim_end_matches('/').to_string();
-        let path = if path.is_empty() {
-            "/__fusion/cache".to_string()
-        } else {
-            path
-        };
+        let task_rows: Vec<Value> = tasks
+            .iter()
+            .map(|t| {
+                let id = t["id"].as_str().unwrap_or("").to_string();
+                let status = t["status"].as_str().unwrap_or("").to_string();
+                let delay = match t.get("delay_ms") {
+                    Some(Value::Null) | None => "—".to_string(),
+                    Some(v) => v.to_string(),
+                };
+                let created = t
+                    .get("created_at_ms")
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "—".into());
+                json!([id, status, delay, created])
+            })
+            .collect();
+        let path = crate::monitor::normalize_path(&self.monitor_path());
         let entry_count = entries.len();
         let event_count = events.len();
+        let task_count = snap["tasks"]["task_count"].as_u64().unwrap_or(0) as usize;
+        let active_count = snap["tasks"]["active_count"].as_u64().unwrap_or(0) as usize;
         json!({
-            "title": "Cache Monitor",
+            "title": "Fusion Monitor",
             "driver": self.driver,
             "driver_label": self.driver,
             "entry_count": entry_count,
             "event_count": event_count,
+            "task_count": task_count,
+            "active_task_count": active_count,
             "entry_badge": format!("{entry_count} keys"),
             "event_badge": format!("{event_count} events"),
+            "task_badge": format!("{active_count}/{task_count} tasks"),
             "empty_entries": entry_count == 0,
             "empty_events": event_count == 0,
+            "empty_tasks": task_count == 0,
             "entry_headers": ["Key", "Value", "TTL (s)"],
             "entry_rows": entry_rows,
             "event_headers": ["Op", "Key", "Time (ms)"],
             "event_rows": event_rows,
+            "task_headers": ["Id", "Status", "Delay (ms)", "Created (ms)"],
+            "task_rows": task_rows,
             "path": path,
             "json_path": format!("{path}/json"),
         })
@@ -507,6 +491,7 @@ fn global_slot() -> &'static RwLock<Option<Cache>> {
 
 /// Install (or replace) the process-wide cache from settings.
 pub fn configure_from_settings(settings: &Settings) -> Result<(), String> {
+    crate::monitor::configure_from_settings(settings);
     let cfg = CacheConfig::from_settings(settings);
     let cache = Cache::open(cfg)?;
     let mut guard = global_slot()
@@ -605,13 +590,13 @@ pub fn panel_context() -> Result<Value, String> {
 }
 
 /// Whether the global cache wants the monitor mounted.
-pub fn monitor_enabled() -> Result<bool, String> {
-    with_global(|c| c.monitor_enabled())
+pub fn monitor_path() -> Result<String, String> {
+    Ok(crate::monitor::path())
 }
 
-/// Monitor path from the global cache config.
-pub fn monitor_path() -> Result<String, String> {
-    with_global(|c| c.monitor_path().to_string())
+/// Whether the Fusion monitor should be mounted.
+pub fn monitor_enabled() -> Result<bool, String> {
+    Ok(crate::monitor::enabled())
 }
 
 /// Reset global cache (tests).
@@ -750,11 +735,13 @@ mod tests {
 
     #[test]
     fn snapshot_lists_entries_and_events() {
+        crate::monitor::configure(crate::monitor::MonitorConfig {
+            enabled: true,
+            path: "/__fusion/monitor".into(),
+        });
         let cache = Cache::open(CacheConfig {
             default_ttl: None,
-            monitor_enabled: true,
-            monitor_path: "/__fusion/cache".into(),
-            monitor_max_events: 10,
+            max_events: 10,
             ..CacheConfig::default()
         })
         .unwrap();
@@ -765,13 +752,19 @@ mod tests {
         assert_eq!(snap["driver"], "moka");
         assert_eq!(snap["entry_count"], 1);
         assert_eq!(snap["monitor"]["enabled"], true);
-        assert_eq!(snap["monitor"]["path"], "/__fusion/cache");
+        assert_eq!(snap["monitor"]["path"], "/__fusion/monitor");
         let entries = snap["entries"].as_array().unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0]["key"], "b");
         let events = snap["events"].as_array().unwrap();
         assert!(events.len() >= 2);
         assert_eq!(events[0]["op"], "delete");
+        assert!(snap["tasks"].is_object());
+        assert!(snap["tasks"]["tasks"].is_array());
+        let ctx = cache.panel_context();
+        assert_eq!(ctx["title"], "Fusion Monitor");
+        assert_eq!(ctx["task_headers"][0], "Id");
+        assert!(ctx["task_badge"].as_str().unwrap_or("").contains("tasks"));
     }
 
     #[test]

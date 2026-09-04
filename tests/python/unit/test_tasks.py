@@ -64,3 +64,14 @@ def test_spawn_after_and_cancel():
 def test_status_unknown_id():
     assert tasks.status("task-does-not-exist") is None
     assert tasks.cancel("task-does-not-exist") is False
+
+
+def test_snapshot_lists_tasks():
+    tid = tasks.spawn_after(5_000, lambda: None)
+    snap = tasks.snapshot()
+    assert snap["task_count"] >= 1
+    assert snap["active_count"] >= 1
+    ids = [t["id"] for t in snap["tasks"]]
+    assert tid in ids
+    assert tasks.cancel(tid) is True
+    assert tasks.snapshot()["tasks"][0]["status"] == "cancelled"

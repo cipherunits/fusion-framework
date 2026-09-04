@@ -56,4 +56,14 @@ describe('background tasks', () => {
     assert.equal(tasks.status('task-does-not-exist'), null)
     assert.equal(tasks.cancel('task-does-not-exist'), false)
   })
+
+  it('snapshot lists tasks', () => {
+    const tid = tasks.spawnAfter(5000, () => {})
+    const snap = tasks.snapshot()
+    assert.ok(snap.task_count >= 1)
+    assert.ok(snap.active_count >= 1)
+    assert.ok(snap.tasks.some((t) => t.id === tid))
+    assert.equal(tasks.cancel(tid), true)
+    assert.equal(tasks.snapshot().tasks[0].status, 'cancelled')
+  })
 })
