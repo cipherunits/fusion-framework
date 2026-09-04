@@ -3,8 +3,8 @@ name: fusion-cache
 description: >-
   Documents Fusion application cache (default moka driver, Redis reserved),
   settings under fusion.<env>.json, sync/async APIs, TTL rules, the optional
-  cache monitor panel, and clear across Python, Node, and C#. Use when adding
-  cache usage or changing drivers.
+  Fusion monitor panel (cache + tasks), and clear across Python, Node, and C#.
+  Use when adding cache usage or changing drivers.
 ---
 
 # Fusion cache
@@ -24,17 +24,17 @@ Redis (`cache.driver = "redis"`) is reserved in settings but **not implemented y
   "driver": "moka",
   "max_capacity": 10000,
   "default_ttl": null,
+  "max_events": 50,
   "connection_string": null,
   "host": "127.0.0.1",
   "port": 6379,
   "username": null,
   "password": null,
-  "db": 0,
-  "monitor": {
-    "enabled": true,
-    "path": "/__fusion/cache",
-    "max_events": 50
-  }
+  "db": 0
+},
+"monitor": {
+  "enabled": true,
+  "path": "/__fusion/monitor"
 }
 ```
 
@@ -43,12 +43,14 @@ Redis (`cache.driver = "redis"`) is reserved in settings but **not implemented y
 | `driver` | `moka` (default) or future `redis` |
 | `max_capacity` | moka max entries |
 | `default_ttl` | seconds, or **`null` = no expiry** unless code passes `ttl=` |
+| `max_events` | Ring-buffer size for recent set/delete/clear events (legacy: `cache.monitor.max_events`) |
 | `connection_string` / `host` / `port` / `username` / `password` / `db` | Redis connection (future) |
 | `monitor.enabled` | Mount HTML + JSON monitor routes (dev scaffold: `true`; stage/prod: `false`) |
-| `monitor.path` | UI path; JSON at `{path}/json` (default `/__fusion/cache`) |
-| `monitor.max_events` | Ring-buffer size for recent set/delete/clear events |
+| `monitor.path` | UI path; JSON at `{path}/json` (default `/__fusion/monitor`) |
 
-When `cache.monitor.enabled` is **false**, bindings must **not** register the monitor endpoints (security: disable routes, not only UI).
+When `monitor.enabled` is **false**, bindings must **not** register the monitor endpoints (security: disable routes, not only UI). Legacy `cache.monitor.enabled` / `cache.monitor.path` still work.
+
+The HTML panel and `{path}/json` include **cache entries**, **recent cache events**, and **background tasks**.
 
 ### TTL rules
 
@@ -86,35 +88,31 @@ Same rules apply to `get_or_set` / `delete_or_set` / `exists_or_set` and their a
 | `await cache.aexists_or_set` | `await cache.aexistsOrSet` | `await Cache.ExistsOrSetAsync` |
 | `await cache.aclear` | `await cache.aclear` | `await Cache.ClearAsync` |
 
-Semantics:
+Notes:
 
-- **get_or_set** — return cached value, else store default (value or callable) and return it
-- **aget_or_set** — same; factory may be **async**
-- **delete_or_set** — delete then set; return stored value
-- **exists_or_set** — if key exists return `true`; else set and return `false`
 - **clear** — drop all keys (keeps the cache instance); **reset** (tests) drops the global instance
-- **snapshot** — entries + recent events (monitor JSON)
-- **panel_context** — template vars for `fusion/cache_monitor.html`
+- **snapshot** — entries + recent events + embedded `tasks` object (monitor JSON)
+- **panel_context** — template vars for `fusion/monitor.html` (including task table)
 
 Values must be JSON-compatible.
 
-## Cache monitor panel
+## Fusion monitor panel
 
-Built-in HTML panel (`FusionBaseTemplate` + `fusion.badge` / `fusion.table` / `fusion.card` / `fusion.button`) auto-mounted on `listen` / `Mount` when `cache.monitor.enabled` is true:
+Built-in HTML panel auto-mounted on `listen` / `Mount` when `monitor.enabled` is true:
 
-- `GET {path}` — HTML (auto-refresh every 5s)
-- `GET {path}/json` — raw snapshot
+- `GET {path}` — HTML (auto-refresh every 5s): cache entries, recent events, background tasks
+- `GET {path}/json` — raw snapshot (includes top-level `tasks`)
 
 Scaffold (fusion-tool): **dev** `enabled: true`; **stage/prod** `enabled: false`.
 
 ## Examples
 
 `examples/cache.py` / `.mjs` / `.cs`  
-`examples/cache_monitor.py` / `.mjs` / `.cs`
+`examples/monitor.py` / `.mjs` / `.cs`
 
 ## Implementation
 
-- Core: `crates/fusion-core/src/cache.rs` (moka) + `assets/templates/fusion/cache_monitor.html`
-- Python: `fusion_framework.cache` + `cache_monitor.mount_cache_monitor`
-- Node: `cache` export + `mountCacheMonitor` in `FusionApp.mount`
-- C#: `Cache` + `CacheMonitor.Mount` via FFI
+- Core: `crates/fusion-core/src/cache.rs` + `monitor.rs` + `assets/templates/fusion/monitor.html`
+- Python: `fusion_framework.cache` + `monitor.mount_monitor`
+- Node: `cache` export + `mountMonitor` in `FusionApp.mount`
+- C#: `Cache` + `FusionMonitor.Mount` via FFI

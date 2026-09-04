@@ -123,7 +123,7 @@ C# (`asp-core`): `main.cs`, `*.csproj` (`net10.0`), `[Route]` / `[HttpGet]`.
 - Convention verbs (`get` / `post` / …) plus one custom slot (`http_get` / `httpGet` / `[HttpGet]` with `[action]`).
 - Opt-in middleware list in `main` (e.g. `request_id`, `cors`, `cache_headers`, `security_headers`, `framework_headers`). Framework does **not** auto-enable middleware; the scaffold opts in.
 - Application cache defaults to **moka** (`cache` block in env JSON); see `fusion-cache` skill.
-- Cache monitor (`cache.monitor.enabled`) is on in **dev** and off in **stage/prod**; when off, no monitor HTTP endpoints are registered.
+- Cache monitor (`monitor.enabled`) is on in **dev** and off in **stage/prod**; when off, no monitor HTTP endpoints are registered.
 
 ### Default ports
 

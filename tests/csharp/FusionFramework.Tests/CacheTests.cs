@@ -80,12 +80,16 @@ public class CacheTests
         Assert.Equal(1, snap["entry_count"]?.GetValue<int>());
         Assert.Equal("demo", snap["entries"]?[0]?["key"]?.GetValue<string>());
         Assert.Equal("set", snap["events"]?[0]?["op"]?.GetValue<string>());
+        Assert.NotNull(snap["tasks"]);
+        Assert.NotNull(snap["tasks"]?["tasks"]?.AsArray());
 
         var ctx = Cache.PanelContext();
-        Assert.Equal("Cache Monitor", ctx["title"]?.GetValue<string>());
+        Assert.Equal("Fusion Monitor", ctx["title"]?.GetValue<string>());
         Assert.False(ctx["empty_entries"]!.GetValue<bool>());
         Assert.Equal("demo", ctx["entry_rows"]?[0]?[0]?.GetValue<string>());
         Assert.EndsWith("/json", ctx["json_path"]!.GetValue<string>());
+        Assert.NotNull(ctx["task_headers"]);
+        Assert.Contains("tasks", ctx["task_badge"]!.GetValue<string>());
     }
 
     [Fact]
@@ -94,28 +98,25 @@ public class CacheTests
         var off = new FusionSettings();
         off.Merge(new JsonObject
         {
-            ["cache"] = new JsonObject
-            {
-                ["monitor"] = new JsonObject { ["enabled"] = false },
-            },
+            ["monitor"] = new JsonObject { ["enabled"] = false },
         });
         using var appOff = new FusionApp(off);
-        Assert.False(CacheMonitor.Mount(appOff, off));
+        Assert.False(FusionMonitor.Mount(appOff, off));
 
         var on = new FusionSettings();
         on.Merge(new JsonObject
         {
+            ["monitor"] = new JsonObject
+            {
+                ["enabled"] = true,
+                ["path"] = "/__fusion/monitor",
+            },
             ["cache"] = new JsonObject
             {
                 ["driver"] = "moka",
-                ["monitor"] = new JsonObject
-                {
-                    ["enabled"] = true,
-                    ["path"] = "/__fusion/cache",
-                },
             },
         });
         using var appOn = new FusionApp(on);
-        Assert.True(CacheMonitor.Mount(appOn, on));
+        Assert.True(FusionMonitor.Mount(appOn, on));
     }
 }

@@ -114,31 +114,33 @@ def test_snapshot_and_panel_context():
     assert snap["entry_count"] == 1
     assert snap["entries"][0]["key"] == "demo"
     assert snap["events"][0]["op"] == "set"
+    assert "tasks" in snap
+    assert isinstance(snap["tasks"]["tasks"], list)
 
     ctx = cache.panel_context()
-    assert ctx["title"] == "Cache Monitor"
+    assert ctx["title"] == "Fusion Monitor"
     assert ctx["empty_entries"] is False
     assert ctx["entry_rows"][0][0] == "demo"
     assert ctx["json_path"].endswith("/json")
+    assert "task_headers" in ctx
+    assert "task_badge" in ctx
 
 
-def test_mount_cache_monitor_respects_enabled_flag():
+def test_mount_monitor_respects_enabled_flag():
     from fusion_framework._fusion import App, Settings
-    from fusion_framework.cache_monitor import mount_cache_monitor
+    from fusion_framework.monitor import mount_monitor
 
     settings_off = Settings()
-    settings_off.merge({"cache": {"monitor": {"enabled": False}}})
+    settings_off.merge({"monitor": {"enabled": False}})
     engine_off = App()
-    assert mount_cache_monitor(engine_off, settings_off) is False
+    assert mount_monitor(engine_off, settings_off) is False
 
     settings_on = Settings()
     settings_on.merge(
         {
-            "cache": {
-                "driver": "moka",
-                "monitor": {"enabled": True, "path": "/__fusion/cache"},
-            }
+            "monitor": {"enabled": True, "path": "/__fusion/monitor"},
+            "cache": {"driver": "moka"},
         }
     )
     engine_on = App()
-    assert mount_cache_monitor(engine_on, settings_on) is True
+    assert mount_monitor(engine_on, settings_on) is True

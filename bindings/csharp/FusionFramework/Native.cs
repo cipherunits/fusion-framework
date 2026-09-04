@@ -274,6 +274,9 @@ internal static class Native
     [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
     public static extern void fusion_task_reset();
 
+    [DllImport(LibName, CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr fusion_task_snapshot();
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate IntPtr FusionHandlerFn(
         IntPtr userData,

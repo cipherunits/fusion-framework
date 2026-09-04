@@ -872,3 +872,9 @@ pub extern "C" fn fusion_task_status(id: *const c_char) -> *mut c_char {
 pub extern "C" fn fusion_task_reset() {
     fusion_core::reset_tasks();
 }
+
+/// JSON snapshot of tracked tasks. Free with fusion_string_free.
+#[unsafe(no_mangle)]
+pub extern "C" fn fusion_task_snapshot() -> *mut c_char {
+    value_to_cstring(&fusion_core::task_snapshot())
+}

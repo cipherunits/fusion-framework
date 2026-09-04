@@ -11,8 +11,7 @@ const BUILTIN_MACROS: &str = include_str!("../assets/templates/fusion/macros.htm
 const BUILTIN_BASE: &str = include_str!("../assets/templates/fusion/base.html");
 const BUILTIN_COMPONENTS_CSS: &str =
     include_str!("../assets/templates/fusion/components.css");
-const BUILTIN_CACHE_MONITOR: &str =
-    include_str!("../assets/templates/fusion/cache_monitor.html");
+const BUILTIN_MONITOR: &str = include_str!("../assets/templates/fusion/monitor.html");
 
 static ENGINE_CACHE: Mutex<Option<EngineCache>> = Mutex::new(None);
 
@@ -67,8 +66,13 @@ fn build_engine(root: &Path) -> Result<Tera, String> {
             BUILTIN_COMPONENTS_CSS.to_string(),
         ),
         (
+            "fusion/monitor.html".to_string(),
+            BUILTIN_MONITOR.to_string(),
+        ),
+        // Legacy alias for older projects.
+        (
             "fusion/cache_monitor.html".to_string(),
-            BUILTIN_CACHE_MONITOR.to_string(),
+            BUILTIN_MONITOR.to_string(),
         ),
     ];
 
@@ -262,34 +266,39 @@ mod tests {
     }
 
     #[test]
-    fn renders_builtin_cache_monitor() {
+    fn renders_builtin_monitor() {
         clear_template_cache();
-        let dir = std::env::temp_dir().join("fusion_tpl_cache_monitor_test");
+        let dir = std::env::temp_dir().join("fusion_tpl_monitor_test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let html = render_template(
-            "fusion/cache_monitor.html",
+            "fusion/monitor.html",
             &json!({
-                "title": "Cache Monitor",
+                "title": "Fusion Monitor",
                 "driver_label": "moka",
                 "entry_badge": "1 keys",
                 "event_badge": "2 events",
+                "task_badge": "0/1 tasks",
                 "empty_entries": false,
                 "empty_events": false,
+                "empty_tasks": false,
                 "entry_headers": ["Key", "Value", "TTL (s)"],
                 "entry_rows": [["demo", "{\"ok\":true}", "∞"]],
                 "event_headers": ["Op", "Key", "Time (ms)"],
                 "event_rows": [["set", "demo", "1"]],
-                "path": "/__fusion/cache",
-                "json_path": "/__fusion/cache/json",
+                "task_headers": ["Id", "Status", "Delay (ms)", "Created (ms)"],
+                "task_rows": [["task-1", "done", "—", "1"]],
+                "path": "/__fusion/monitor",
+                "json_path": "/__fusion/monitor/json",
             }),
             &dir,
         )
         .unwrap();
-        assert!(html.contains("Cache Monitor"));
+        assert!(html.contains("Fusion Monitor"));
+        assert!(html.contains("Background tasks"));
         assert!(html.contains("fusion-table"));
         assert!(html.contains("demo"));
-        // Builtin monitor uses page_size={10} on both tables.
+        assert!(html.contains("task-1"));
         assert!(html.contains("data-page-size=\"10\""));
         let _ = std::fs::remove_dir_all(&dir);
     }

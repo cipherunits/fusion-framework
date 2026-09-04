@@ -1,3 +1,4 @@
+using System.Linq;
 using FusionFramework;
 using Xunit;
 
@@ -61,5 +62,18 @@ public class TaskTests
     {
         Assert.Null(BackgroundTasks.Status("task-does-not-exist"));
         Assert.False(BackgroundTasks.Cancel("task-does-not-exist"));
+    }
+
+    [Fact]
+    public void SnapshotListsTasks()
+    {
+        var tid = BackgroundTasks.SpawnAfter(5000, () => { });
+        var snap = BackgroundTasks.Snapshot();
+        Assert.True(snap["task_count"]!.GetValue<int>() >= 1);
+        Assert.True(snap["active_count"]!.GetValue<int>() >= 1);
+        var ids = snap["tasks"]!.AsArray().Select(t => t!["id"]!.GetValue<string>());
+        Assert.Contains(tid, ids);
+        Assert.True(BackgroundTasks.Cancel(tid));
+        Assert.Equal("cancelled", BackgroundTasks.Snapshot()["tasks"]![0]!["status"]!.GetValue<string>());
     }
 }

@@ -1,4 +1,3 @@
-// Deprecated filename — prefer examples/monitor.cs
 // Built-in Fusion monitor (cache + background tasks).
 // Enable via fusion.<env>.json:
 //   "monitor": { "enabled": true, "path": "/__fusion/monitor" }

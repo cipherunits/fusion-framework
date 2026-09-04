@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text.Json.Nodes;
 
 namespace FusionFramework;
 
@@ -67,6 +68,18 @@ public static class BackgroundTasks
         if (ptr == IntPtr.Zero)
             return null;
         return Native.TakeUtf8(ptr);
+    }
+
+    /// <summary>JSON snapshot of tracked tasks (also under <see cref="Cache.Snapshot"/>).</summary>
+    public static JsonNode Snapshot()
+    {
+        var ptr = Native.fusion_task_snapshot();
+        if (ptr == IntPtr.Zero)
+            throw new InvalidOperationException("task snapshot failed");
+        var json = Native.TakeUtf8(ptr);
+        if (string.IsNullOrEmpty(json))
+            throw new InvalidOperationException("empty task snapshot");
+        return JsonNode.Parse(json) ?? new JsonObject();
     }
 
     /// <summary>Abort and clear all tracked tasks (tests).</summary>
