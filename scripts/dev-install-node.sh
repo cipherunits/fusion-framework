@@ -58,10 +58,10 @@ npm install
 
 if [[ "$PROFILE" == "release" ]]; then
   info "building native addon (release)"
-  npm run build
+  npm run build:napi
 else
   info "building native addon (debug)"
-  npm run build:debug
+  npm run build:napi:debug
 fi
 
 info "smoke test (local require)"
