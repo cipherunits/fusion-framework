@@ -1,0 +1,37 @@
+{# Fusion Text — multi-line textarea control.
+   Usage:
+     {{<fusion.text name="bio" placeholder="Tell us about yourself…" rows={4} />}}
+     {{<fusion.text name="notes" label="Notes" invalid={true} hint="Too short" />}}
+#}
+{% component fusion.text(
+  name: string = "",
+  id: string = "",
+  placeholder: string = "",
+  value: string = "",
+  label: string = "",
+  hint: string = "",
+  rows: number = 4,
+  disabled: bool = false,
+  invalid: bool = false,
+  class: string = ""
+) %}
+{%- set text_id = id -%}
+{%- if not text_id and name -%}{%- set text_id = name -%}{%- endif -%}
+<div class="fusion-text-field{% if class %} {{ class }}{% endif %}">
+  {% if label %}
+  <label class="fusion-text-field__label"{% if text_id %} for="{{ text_id }}"{% endif %}>{{ label }}</label>
+  {% endif %}
+  <textarea
+    class="fusion-text{% if invalid %} fusion-text--invalid{% endif %}"
+    {% if text_id %}id="{{ text_id }}"{% endif %}
+    {% if name %}name="{{ name }}"{% endif %}
+    {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+    rows="{{ rows }}"
+    {% if disabled %}disabled{% endif %}
+    {% if invalid %}aria-invalid="true"{% endif %}
+  >{% if value %}{{ value }}{% endif %}</textarea>
+  {% if hint %}
+  <p class="fusion-text-field__hint{% if invalid %} fusion-text-field__hint--error{% endif %}">{{ hint }}</p>
+  {% endif %}
+</div>
+{% endcomponent fusion.text %}

@@ -1,0 +1,87 @@
+/* Single-line text field — shadcn/ui-aligned control chrome. */
+
+.fusion-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  width: 100%;
+}
+
+.fusion-input-field__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-tight);
+  color: var(--foreground);
+}
+
+.fusion-input {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  height: var(--control-height);
+  padding: var(--spacing-2) var(--spacing-3);
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--leading-normal);
+  color: var(--foreground);
+  background-color: transparent;
+  border: var(--border-width) solid var(--input);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-xs);
+  outline: none;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.fusion-input::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
+.fusion-input:hover:not(:disabled):not([aria-invalid="true"]) {
+  border-color: var(--ring);
+}
+
+.fusion-input:focus-visible {
+  border-color: var(--ring);
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 var(--ring-width) color-mix(in oklch, var(--ring) 25%, transparent);
+}
+
+.fusion-input:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+}
+
+.fusion-input[aria-invalid="true"],
+.fusion-input.fusion-input--invalid {
+  border-color: var(--destructive);
+}
+
+.fusion-input[aria-invalid="true"]:focus-visible,
+.fusion-input.fusion-input--invalid:focus-visible {
+  border-color: var(--destructive);
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 var(--ring-width) color-mix(in oklch, var(--destructive) 25%, transparent);
+}
+
+.fusion-input-field__hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted-foreground);
+}
+
+.fusion-input-field__hint--error {
+  color: var(--destructive);
+}

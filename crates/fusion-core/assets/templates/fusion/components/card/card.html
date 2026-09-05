@@ -1,0 +1,28 @@
+{# Fusion Card — optional image, title, and subtitle slots.
+   Omit any prop to skip that slot (no empty gap in the layout).
+   Usage:
+     {{<fusion.card image="/hero.jpg" />}}
+     {{<fusion.card title="Hello" />}}
+     {{<fusion.card title="Hello" subtitle="World" />}}
+     {{<fusion.card image="/hero.jpg" title="Hello" subtitle="World" />}}
+#}
+{% component fusion.card(
+  image: string = "",
+  title: string = "",
+  subtitle: string = "",
+  image_alt: string = ""
+) %}
+<div class="fusion-card">
+  {% if image %}
+  <div class="fusion-card__media">
+    <img class="fusion-card__image" src="{{ image }}" alt="{{ image_alt }}" />
+  </div>
+  {% endif %}
+  {% if title or subtitle %}
+  <div class="fusion-card__body">
+    {% if title %}<h3 class="fusion-card__title">{{ title }}</h3>{% endif %}
+    {% if subtitle %}<p class="fusion-card__subtitle">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endcomponent fusion.card %}
