@@ -3,20 +3,35 @@
   "version": "1.2.6",
   "description": "Class-based HTTP framework for Node.js, powered by a shared Rust core via N-API",
   "keywords": [
+    "fusion",
+    "fusion-framework",
+    "cipherunit",
+    "backend",
+    "backend-framework",
     "http",
-    "framework",
-    "nodejs",
     "http-server",
     "web-framework",
     "rest",
     "api",
+    "class-based",
     "routing",
     "middleware",
-    "jwt",
+    "swagger",
+    "openapi",
+    "nodejs",
     "typescript",
-    "napi",
+    "python",
+    "csharp",
+    "cross-platform",
+    "multi-language",
+    "fma",
+    "fusion-module-architecture",
     "rust",
-    "fusion"
+    "napi",
+    "jwt",
+    "cache",
+    "tera",
+    "templates"
   ],
   "homepage": "https://fusion.cipherunit.xyz/",
   "bugs": {
@@ -27,7 +42,10 @@
     "url": "git+https://github.com/cipherunits/fusion-framework.git",
     "directory": "crates/fusion-node"
   },
-  "author": "CipherUnits <cipherunit.dev@gmail.com>",
+  "author": "CipherUnits",
+  "authorUrl": "https://cipherunit.xyz",
+  "authorEmail": "cipherunit.dev@gmail.com",
+  "npmUrl":"https://www.npmjs.com/package/fusion-framework",
   "license": "BSD-3-Clause",
   "type": "commonjs",
   "main": "./index.js",
@@ -62,9 +80,24 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "napi build --platform --release --js false",
-    "build:debug": "napi build --platform --js false",
-    "prepublishOnly": "node -e \"const fs=require('fs');const ok=fs.readdirSync('.').some(f=>f.endsWith('.node'));if(!ok){console.error('Missing native .node binaries before publish');process.exit(1)}\""
+    "build:napi": "napi build --platform --release --js false",
+    "build:napi:debug": "napi build --platform --js false",
+    "prepublishOnly": "node -e \"const fs=require('fs');const ok=fs.readdirSync('.').some(f=>f.endsWith('.node'));if(!ok){console.error('Missing native .node binaries before publish');process.exit(1)}\"",
+    "build": "fusion command build",
+    "build:dev": "fusion command build:dev",
+    "build:stage": "fusion command build:stage",
+    "build:prod": "fusion command build:prod",
+    "start": "fusion command start",
+    "start:dev": "fusion command start:dev",
+    "start:stage": "fusion command start:stage",
+    "start:prod": "fusion command start:prod",
+    "run": "fusion command run",
+    "run:dev": "fusion command run:dev",
+    "run:stage": "fusion command run:stage",
+    "run:prod": "fusion command run:prod",
+    "health": "fusion command health",
+    "clean": "fusion command clean",
+    "install:deps": "fusion command install"
   },
   "publishConfig": {
     "access": "public",
@@ -77,7 +110,8 @@
   "os": [
     "linux",
     "darwin",
-    "win32"
+    "win32",
+    "macOS"
   ],
   "devDependencies": {
     "@napi-rs/cli": "^2.18.4"
