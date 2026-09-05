@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <base href="/ui/" />
+  <title>Fusion UI — Input, Text, Card, Dropdown</title>
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("fusion-theme");
+        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (stored === "dark" || (!stored && prefersDark)) {
+          document.documentElement.classList.add("dark");
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="global.css" />
+  <link rel="stylesheet" href="index.css" />
+  <link rel="stylesheet" href="components/input/input.css" />
+  <link rel="stylesheet" href="components/text/text.css" />
+  <link rel="stylesheet" href="components/card/card.css" />
+  <link rel="stylesheet" href="components/dropdown/dropdown.css" />
+</head>
+<body>
+  <main class="gallery">
+    <header class="gallery__header">
+      <div class="gallery__intro">
+        <p class="gallery__eyebrow">Fusion templates</p>
+        <h1 class="gallery__title">UI components</h1>
+        <p class="gallery__lede">
+          Live reference for Input, Text, Card, and Dropdown. Styles use
+          <code>global.css</code> tokens — toggle dark mode to verify both themes.
+        </p>
+      </div>
+      <button type="button" class="gallery__theme-toggle" id="theme-toggle" aria-pressed="false">
+        <svg class="gallery__theme-toggle-icon gallery__theme-toggle-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z" />
+        </svg>
+        <svg class="gallery__theme-toggle-icon gallery__theme-toggle-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+        <span data-theme-label>Dark</span>
+      </button>
+    </header>
+
+    <!-- ─── Input ─── -->
+    <section class="gallery-section" aria-labelledby="input-heading">
+      <div class="gallery-section__head">
+        <h2 class="gallery-section__title" id="input-heading">Input</h2>
+        <p class="gallery-section__desc">
+          Single-line control with default, hover, focus, disabled, and invalid states.
+        </p>
+      </div>
+
+      <div class="usage-block">
+        <p class="demo__label">Usage</p>
+        <pre class="demo__code">{{&lt;fusion.input
+  name="email"
+  label="Email"
+  type="email"
+  placeholder="you@example.com"
+/&gt;}}
+
+{# Invalid #}
+{{&lt;fusion.input name="email" label="Email" invalid={true} hint="Enter a valid email" /&gt;}}
+
+{# Include styles #}
+&lt;link rel="stylesheet" href="components/input/input.css" /&gt;</pre>
+      </div>
+
+      <div class="gallery-grid gallery-grid--controls">
+        <div class="demo">
+          <p class="demo__label">Default</p>
+          <div class="demo__preview">
+            <div class="fusion-input-field">
+              <label class="fusion-input-field__label" for="demo-input-default">Email</label>
+              <input
+                class="fusion-input"
+                id="demo-input-default"
+                type="email"
+                name="email"
+                placeholder="you@example.com"
+              />
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.input name="email" label="Email" placeholder="you@example.com" /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Hover / Focus</p>
+          <div class="demo__preview">
+            <div class="fusion-input-field">
+              <label class="fusion-input-field__label" for="demo-input-focus">Username</label>
+              <input
+                class="fusion-input"
+                id="demo-input-focus"
+                type="text"
+                name="username"
+                placeholder="Hover or focus me"
+                value="ada.lovelace"
+              />
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.input name="username" label="Username" value="ada.lovelace" /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Disabled</p>
+          <div class="demo__preview">
+            <div class="fusion-input-field">
+              <label class="fusion-input-field__label" for="demo-input-disabled">API key</label>
+              <input
+                class="fusion-input"
+                id="demo-input-disabled"
+                type="text"
+                name="api_key"
+                value="••••••••••••"
+                disabled
+              />
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.input name="api_key" label="API key" value="…" disabled={true} /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Error / invalid</p>
+          <div class="demo__preview">
+            <div class="fusion-input-field">
+              <label class="fusion-input-field__label" for="demo-input-invalid">Email</label>
+              <input
+                class="fusion-input fusion-input--invalid"
+                id="demo-input-invalid"
+                type="email"
+                name="email_bad"
+                value="not-an-email"
+                aria-invalid="true"
+              />
+              <p class="fusion-input-field__hint fusion-input-field__hint--error">Enter a valid email</p>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.input name="email" label="Email" invalid={true} hint="Enter a valid email" /&gt;}}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Text ─── -->
+    <section class="gallery-section" aria-labelledby="text-heading">
+      <div class="gallery-section__head">
+        <h2 class="gallery-section__title" id="text-heading">Text</h2>
+        <p class="gallery-section__desc">
+          Multi-line textarea with the same border, radius, and state language as Input.
+        </p>
+      </div>
+
+      <div class="usage-block">
+        <p class="demo__label">Usage</p>
+        <pre class="demo__code">{{&lt;fusion.text
+  name="bio"
+  label="Bio"
+  placeholder="Tell us about yourself…"
+  rows={4}
+/&gt;}}
+
+&lt;link rel="stylesheet" href="components/text/text.css" /&gt;</pre>
+      </div>
+
+      <div class="gallery-grid gallery-grid--controls">
+        <div class="demo">
+          <p class="demo__label">Default</p>
+          <div class="demo__preview">
+            <div class="fusion-text-field">
+              <label class="fusion-text-field__label" for="demo-text-default">Bio</label>
+              <textarea
+                class="fusion-text"
+                id="demo-text-default"
+                name="bio"
+                rows="4"
+                placeholder="Tell us about yourself…"
+              ></textarea>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.text name="bio" label="Bio" rows={4} /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Hover / Focus</p>
+          <div class="demo__preview">
+            <div class="fusion-text-field">
+              <label class="fusion-text-field__label" for="demo-text-focus">Description</label>
+              <textarea class="fusion-text" id="demo-text-focus" name="description" rows="4">A short product blurb. Focus to see the ring.</textarea>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.text name="description" label="Description" value="…" /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Disabled</p>
+          <div class="demo__preview">
+            <div class="fusion-text-field">
+              <label class="fusion-text-field__label" for="demo-text-disabled">Locked notes</label>
+              <textarea class="fusion-text" id="demo-text-disabled" name="locked" rows="4" disabled>Read-only content.</textarea>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.text name="locked" label="Locked notes" disabled={true} /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Error / invalid</p>
+          <div class="demo__preview">
+            <div class="fusion-text-field">
+              <label class="fusion-text-field__label" for="demo-text-invalid">Feedback</label>
+              <textarea
+                class="fusion-text fusion-text--invalid"
+                id="demo-text-invalid"
+                name="feedback"
+                rows="4"
+                aria-invalid="true"
+              >Too short</textarea>
+              <p class="fusion-text-field__hint fusion-text-field__hint--error">Minimum 20 characters</p>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.text name="feedback" label="Feedback" invalid={true} hint="Minimum 20 characters" /&gt;}}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Card ─── -->
+    <section class="gallery-section" aria-labelledby="card-heading">
+      <div class="gallery-section__head">
+        <h2 class="gallery-section__title" id="card-heading">Card</h2>
+        <p class="gallery-section__desc">
+          Optional <code>image</code>, <code>title</code>, and <code>subtitle</code> slots.
+          Missing slots are not rendered — layout collapses without empty gaps.
+        </p>
+      </div>
+
+      <div class="usage-block">
+        <p class="demo__label">Usage</p>
+        <pre class="demo__code">{{&lt;fusion.card image="/hero.jpg" /&gt;}}
+{{&lt;fusion.card title="Project Atlas" /&gt;}}
+{{&lt;fusion.card title="Project Atlas" subtitle="Edge-ready APIs" /&gt;}}
+{{&lt;fusion.card
+  image="/hero.jpg"
+  title="Project Atlas"
+  subtitle="Edge-ready APIs"
+  image_alt="Atlas cover"
+/&gt;}}
+
+&lt;link rel="stylesheet" href="components/card/card.css" /&gt;</pre>
+      </div>
+
+      <div class="gallery-grid">
+        <div class="demo">
+          <p class="demo__label">Image only</p>
+          <div class="demo__preview">
+            <div class="fusion-card">
+              <div class="fusion-card__media">
+                <img
+                  class="fusion-card__image"
+                  src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='400' viewBox='0 0 640 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23d4d4d4'/%3E%3Cstop offset='1' stop-color='%23a3a3a3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='640' height='400' fill='url(%23g)'/%3E%3C/svg%3E"
+                  alt=""
+                />
+              </div>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.card image="/hero.jpg" /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Title only</p>
+          <div class="demo__preview">
+            <div class="fusion-card">
+              <div class="fusion-card__body">
+                <h3 class="fusion-card__title">Project Atlas</h3>
+              </div>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.card title="Project Atlas" /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Title + subtitle</p>
+          <div class="demo__preview">
+            <div class="fusion-card">
+              <div class="fusion-card__body">
+                <h3 class="fusion-card__title">Project Atlas</h3>
+                <p class="fusion-card__subtitle">Edge-ready APIs for modern teams</p>
+              </div>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.card title="Project Atlas" subtitle="Edge-ready APIs for modern teams" /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Image + title + subtitle</p>
+          <div class="demo__preview">
+            <div class="fusion-card">
+              <div class="fusion-card__media">
+                <img
+                  class="fusion-card__image"
+                  src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='400' viewBox='0 0 640 400'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%23d4d4d4'/%3E%3Cstop offset='1' stop-color='%23a3a3a3'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='640' height='400' fill='url(%23g)'/%3E%3C/svg%3E"
+                  alt="Atlas cover"
+                />
+              </div>
+              <div class="fusion-card__body">
+                <h3 class="fusion-card__title">Project Atlas</h3>
+                <p class="fusion-card__subtitle">Edge-ready APIs for modern teams</p>
+              </div>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.card
+  image="/hero.jpg"
+  title="Project Atlas"
+  subtitle="Edge-ready APIs for modern teams"
+/&gt;}}</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── Dropdown ─── -->
+    <section class="gallery-section" aria-labelledby="dropdown-heading">
+      <div class="gallery-section__head">
+        <h2 class="gallery-section__title" id="dropdown-heading">Dropdown</h2>
+        <p class="gallery-section__desc">
+          Select-style trigger with popover menu — default, open, disabled, and invalid states.
+        </p>
+      </div>
+
+      <div class="usage-block">
+        <p class="demo__label">Usage</p>
+        <pre class="demo__code">{{&lt;fusion.dropdown
+  name="role"
+  label="Role"
+  placeholder="Pick a role"
+  options={roles}
+/&gt;}}
+
+&lt;link rel="stylesheet" href="components/dropdown/dropdown.css" /&gt;
+&lt;script src="components/dropdown/dropdown.js"&gt;&lt;/script&gt;</pre>
+      </div>
+
+      <div class="gallery-grid gallery-grid--controls">
+        <div class="demo">
+          <p class="demo__label">Default</p>
+          <div class="demo__preview">
+            <div class="fusion-dropdown-field">
+              <label class="fusion-dropdown-field__label" for="demo-dd-default">Role</label>
+              <div class="fusion-dropdown" data-fusion-dropdown data-name="role">
+                <input type="hidden" name="role" value="" data-fusion-dropdown-input />
+                <button
+                  type="button"
+                  class="fusion-dropdown__trigger"
+                  id="demo-dd-default"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-controls="demo-dd-default-menu"
+                  data-fusion-dropdown-trigger
+                >
+                  <span class="fusion-dropdown__value fusion-dropdown__value--placeholder" data-fusion-dropdown-value>Pick a role</span>
+                  <svg class="fusion-dropdown__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <ul class="fusion-dropdown__menu" id="demo-dd-default-menu" role="listbox" data-fusion-dropdown-menu hidden>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="admin" aria-selected="false" data-fusion-dropdown-item>Admin</button></li>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="editor" aria-selected="false" data-fusion-dropdown-item>Editor</button></li>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="viewer" aria-selected="false" data-fusion-dropdown-item>Viewer</button></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.dropdown name="role" label="Role" placeholder="Pick a role" options={roles} /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Selected / open</p>
+          <div class="demo__preview">
+            <div class="fusion-dropdown-field">
+              <label class="fusion-dropdown-field__label" for="demo-dd-open">Plan</label>
+              <div class="fusion-dropdown" data-fusion-dropdown data-open="true" data-name="plan">
+                <input type="hidden" name="plan" value="pro" data-fusion-dropdown-input />
+                <button
+                  type="button"
+                  class="fusion-dropdown__trigger"
+                  id="demo-dd-open"
+                  aria-haspopup="listbox"
+                  aria-expanded="true"
+                  aria-controls="demo-dd-open-menu"
+                  data-fusion-dropdown-trigger
+                >
+                  <span class="fusion-dropdown__value" data-fusion-dropdown-value>Pro</span>
+                  <svg class="fusion-dropdown__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <ul class="fusion-dropdown__menu" id="demo-dd-open-menu" role="listbox" data-fusion-dropdown-menu>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="free" aria-selected="false" data-fusion-dropdown-item>Free</button></li>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="pro" aria-selected="true" data-fusion-dropdown-item>Pro</button></li>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="team" aria-selected="false" data-fusion-dropdown-item>Team</button></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.dropdown name="plan" label="Plan" value="pro" options={plans} /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Disabled</p>
+          <div class="demo__preview">
+            <div class="fusion-dropdown-field">
+              <label class="fusion-dropdown-field__label" for="demo-dd-disabled">Region</label>
+              <div class="fusion-dropdown" data-fusion-dropdown>
+                <button
+                  type="button"
+                  class="fusion-dropdown__trigger"
+                  id="demo-dd-disabled"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  disabled
+                  data-fusion-dropdown-trigger
+                >
+                  <span class="fusion-dropdown__value">us-east-1</span>
+                  <svg class="fusion-dropdown__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.dropdown name="region" label="Region" value="us-east-1" disabled={true} /&gt;}}</pre>
+        </div>
+
+        <div class="demo">
+          <p class="demo__label">Error / invalid</p>
+          <div class="demo__preview">
+            <div class="fusion-dropdown-field">
+              <label class="fusion-dropdown-field__label" for="demo-dd-invalid">Workspace</label>
+              <div class="fusion-dropdown" data-fusion-dropdown data-name="workspace">
+                <input type="hidden" name="workspace" value="" data-fusion-dropdown-input />
+                <button
+                  type="button"
+                  class="fusion-dropdown__trigger fusion-dropdown__trigger--invalid"
+                  id="demo-dd-invalid"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                  aria-invalid="true"
+                  aria-controls="demo-dd-invalid-menu"
+                  data-fusion-dropdown-trigger
+                >
+                  <span class="fusion-dropdown__value fusion-dropdown__value--placeholder" data-fusion-dropdown-value>Choose workspace</span>
+                  <svg class="fusion-dropdown__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                </button>
+                <ul class="fusion-dropdown__menu" id="demo-dd-invalid-menu" role="listbox" data-fusion-dropdown-menu hidden>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="alpha" aria-selected="false" data-fusion-dropdown-item>Alpha</button></li>
+                  <li role="none"><button type="button" class="fusion-dropdown__item" role="option" data-value="beta" aria-selected="false" data-fusion-dropdown-item>Beta</button></li>
+                </ul>
+              </div>
+              <p class="fusion-dropdown-field__hint fusion-dropdown-field__hint--error">Workspace is required</p>
+            </div>
+          </div>
+          <pre class="demo__code">{{&lt;fusion.dropdown name="workspace" label="Workspace" invalid={true} hint="Workspace is required" options={ws} /&gt;}}</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="components/dropdown/dropdown.js"></script>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById("theme-toggle");
+      var label = btn && btn.querySelector("[data-theme-label]");
+
+      function syncToggle() {
+        var dark = root.classList.contains("dark");
+        if (btn) btn.setAttribute("aria-pressed", dark ? "true" : "false");
+        if (label) label.textContent = dark ? "Light" : "Dark";
+      }
+
+      syncToggle();
+
+      if (btn) {
+        btn.addEventListener("click", function () {
+          var next = root.classList.toggle("dark") ? "dark" : "light";
+          try {
+            localStorage.setItem("fusion-theme", next);
+          } catch (_) {}
+          syncToggle();
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

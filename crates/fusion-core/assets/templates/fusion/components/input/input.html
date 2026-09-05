@@ -1,0 +1,40 @@
+{# Fusion Input — single-line text control.
+   Usage:
+     {{<fusion.input name="email" placeholder="you@example.com" />}}
+     {{<fusion.input name="email" label="Email" invalid={true} hint="Required" />}}
+#}
+{% component fusion.input(
+  name: string = "",
+  id: string = "",
+  type: string = "text",
+  placeholder: string = "",
+  value: string = "",
+  label: string = "",
+  hint: string = "",
+  disabled: bool = false,
+  invalid: bool = false,
+  autocomplete: string = "",
+  class: string = ""
+) %}
+{%- set input_id = id -%}
+{%- if not input_id and name -%}{%- set input_id = name -%}{%- endif -%}
+<div class="fusion-input-field{% if class %} {{ class }}{% endif %}">
+  {% if label %}
+  <label class="fusion-input-field__label"{% if input_id %} for="{{ input_id }}"{% endif %}>{{ label }}</label>
+  {% endif %}
+  <input
+    class="fusion-input{% if invalid %} fusion-input--invalid{% endif %}"
+    type="{{ type }}"
+    {% if input_id %}id="{{ input_id }}"{% endif %}
+    {% if name %}name="{{ name }}"{% endif %}
+    {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+    {% if value %}value="{{ value }}"{% endif %}
+    {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+    {% if disabled %}disabled{% endif %}
+    {% if invalid %}aria-invalid="true"{% endif %}
+  />
+  {% if hint %}
+  <p class="fusion-input-field__hint{% if invalid %} fusion-input-field__hint--error{% endif %}">{{ hint }}</p>
+  {% endif %}
+</div>
+{% endcomponent fusion.input %}

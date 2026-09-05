@@ -1,0 +1,75 @@
+{# Fusion Dropdown — select-style trigger + popover menu.
+   Pass `options` as an array of strings (or objects with value/label).
+   Usage:
+     {{<fusion.dropdown name="role" label="Role" placeholder="Pick a role" options={roles} />}}
+     {{<fusion.dropdown name="plan" label="Plan" invalid={true} hint="Required" options={plans} />}}
+#}
+{% component fusion.dropdown(
+  name: string = "",
+  id: string = "",
+  label: string = "",
+  placeholder: string = "Select…",
+  value: string = "",
+  options: array = [],
+  hint: string = "",
+  disabled: bool = false,
+  invalid: bool = false,
+  class: string = ""
+) %}
+{%- set dropdown_id = id -%}
+{%- if not dropdown_id and name -%}{%- set dropdown_id = name -%}{%- endif -%}
+{%- set menu_id = dropdown_id ~ "-menu" -%}
+<div class="fusion-dropdown-field{% if class %} {{ class }}{% endif %}">
+  {% if label %}
+  <label class="fusion-dropdown-field__label"{% if dropdown_id %} for="{{ dropdown_id }}"{% endif %}>{{ label }}</label>
+  {% endif %}
+  <div class="fusion-dropdown" data-fusion-dropdown{% if name %} data-name="{{ name }}"{% endif %}>
+    {% if name %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}" data-fusion-dropdown-input />
+    {% endif %}
+    <button
+      type="button"
+      class="fusion-dropdown__trigger{% if invalid %} fusion-dropdown__trigger--invalid{% endif %}"
+      {% if dropdown_id %}id="{{ dropdown_id }}"{% endif %}
+      aria-haspopup="listbox"
+      aria-expanded="false"
+      aria-controls="{{ menu_id }}"
+      {% if invalid %}aria-invalid="true"{% endif %}
+      {% if disabled %}disabled{% endif %}
+      data-fusion-dropdown-trigger
+    >
+      <span
+        class="fusion-dropdown__value{% if not value %} fusion-dropdown__value--placeholder{% endif %}"
+        data-fusion-dropdown-value
+      >{% if value %}{{ value }}{% else %}{{ placeholder }}{% endif %}</span>
+      <svg class="fusion-dropdown__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </button>
+    <ul class="fusion-dropdown__menu" id="{{ menu_id }}" role="listbox" data-fusion-dropdown-menu hidden>
+      {% for opt in options %}
+      {%- set opt_value = opt -%}
+      {%- set opt_label = opt -%}
+      {%- if opt is object -%}
+        {%- set opt_value = opt.value -%}
+        {%- set opt_label = opt.label | default(value=opt.value) -%}
+      {%- endif -%}
+      <li role="none">
+        <button
+          type="button"
+          class="fusion-dropdown__item"
+          role="option"
+          data-value="{{ opt_value }}"
+          {% if value == opt_value %}aria-selected="true"{% else %}aria-selected="false"{% endif %}
+          data-fusion-dropdown-item
+        >{{ opt_label }}</button>
+      </li>
+      {% endfor %}
+      {{ body | safe }}
+    </ul>
+  </div>
+  {% if hint %}
+  <p class="fusion-dropdown-field__hint{% if invalid %} fusion-dropdown-field__hint--error{% endif %}">{{ hint }}</p>
+  {% endif %}
+</div>
+{% endcomponent fusion.dropdown %}

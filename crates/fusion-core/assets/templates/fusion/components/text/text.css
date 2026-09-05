@@ -1,0 +1,89 @@
+/* Multi-line text control — same chrome language as Input (shadcn/ui). */
+
+.fusion-text-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  width: 100%;
+}
+
+.fusion-text-field__label {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-tight);
+  color: var(--foreground);
+}
+
+.fusion-text {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: calc(var(--control-height) * 2.5);
+  padding: var(--spacing-2) var(--spacing-3);
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--leading-relaxed);
+  color: var(--foreground);
+  background-color: transparent;
+  border: var(--border-width) solid var(--input);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-xs);
+  outline: none;
+  resize: vertical;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.fusion-text::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
+}
+
+.fusion-text:hover:not(:disabled):not([aria-invalid="true"]) {
+  border-color: var(--ring);
+}
+
+.fusion-text:focus-visible {
+  border-color: var(--ring);
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 var(--ring-width) color-mix(in oklch, var(--ring) 25%, transparent);
+}
+
+.fusion-text:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+  background-color: var(--muted);
+  color: var(--muted-foreground);
+  resize: none;
+}
+
+.fusion-text[aria-invalid="true"],
+.fusion-text.fusion-text--invalid {
+  border-color: var(--destructive);
+}
+
+.fusion-text[aria-invalid="true"]:focus-visible,
+.fusion-text.fusion-text--invalid:focus-visible {
+  border-color: var(--destructive);
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 var(--ring-width) color-mix(in oklch, var(--destructive) 25%, transparent);
+}
+
+.fusion-text-field__hint {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  color: var(--muted-foreground);
+}
+
+.fusion-text-field__hint--error {
+  color: var(--destructive);
+}
