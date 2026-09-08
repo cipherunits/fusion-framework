@@ -482,15 +482,54 @@ function prefersJsonFallback(accept, formatQuery) {
   return bestJson > 0 && bestJson >= bestHtml
 }
 
+function parseFormBody(body, contentType) {
+  const raw = body == null ? '' : String(body)
+  const ct = String(contentType || '').toLowerCase()
+  if (ct.includes('application/json') || (raw.trim().startsWith('{') && !ct.includes('urlencoded'))) {
+    try {
+      const data = raw.trim() ? JSON.parse(raw) : {}
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        const out = {}
+        for (const [k, v] of Object.entries(data)) out[k] = v == null ? '' : String(v)
+        return out
+      }
+    } catch {
+      return {}
+    }
+    return {}
+  }
+  const params = new URLSearchParams(raw)
+  const out = {}
+  for (const key of params.keys()) {
+    out[key] = params.get(key) ?? ''
+  }
+  return out
+}
+
 class FusionBaseTemplate extends FusionBaseApi {
   static __fusion_template__ = true
   static template = ''
   static templateAddress = ''
   static templatesDir = ''
 
-  /** Template variables; may return a Promise (async context). */
+  /**
+   * Template variables (not an HTTP verb). May return a Promise.
+   * get() renders this as HTML; post() should use form / ok / fail.
+   */
   context() {
     return {}
+  }
+
+  /** Parsed POST body (urlencoded or JSON) as flat string fields. */
+  get form() {
+    let contentType = null
+    for (const [key, value] of Object.entries(this.headers || {})) {
+      if (String(key).toLowerCase() === 'content-type') {
+        contentType = String(value)
+        break
+      }
+    }
+    return parseFormBody(this.body, contentType)
   }
 
   get() {
@@ -510,6 +549,57 @@ class FusionBaseTemplate extends FusionBaseApi {
     const data = { ...(ctx || {}) }
     if (this.wantsJson()) return data
     return this._htmlResponse(data)
+  }
+
+  /**
+   * Validation failure — JSON for SPA fetch, else same template with errors.
+   * fail({ phone: 'required' }, { message: 'خطا', ...formFields })
+   */
+  fail(errors = {}, extras = {}) {
+    const bag = typeof extras === 'string' ? { message: extras } : { ...(extras || {}) }
+    const message = bag.message != null ? String(bag.message) : 'Validation failed'
+    delete bag.message
+    const err = {}
+    for (const [k, v] of Object.entries(errors || {})) err[k] = String(v)
+    const flat = {}
+    for (const [k, v] of Object.entries(bag)) flat[k] = v == null ? '' : String(v)
+
+    if (this.wantsJson()) {
+      return this.response({ ok: false, message, errors: err, fields: flat }, 400)
+    }
+    return this._formHtmlResult({ ok: false, message, errors: err, fields: flat, status: 400 })
+  }
+
+  /** Success — JSON for SPA fetch, else same template with ok=true. */
+  ok(extras = {}) {
+    const bag = typeof extras === 'string' ? { message: extras } : { ...(extras || {}) }
+    const message = bag.message != null ? String(bag.message) : 'OK'
+    delete bag.message
+    const flat = {}
+    for (const [k, v] of Object.entries(bag)) flat[k] = v == null ? '' : String(v)
+
+    if (this.wantsJson()) {
+      return this.response({ ok: true, message, errors: {}, fields: flat }, 200)
+    }
+    return this._formHtmlResult({ ok: true, message, errors: {}, fields: flat, status: 200 })
+  }
+
+  _formHtmlResult({ ok, message, errors, fields, status }) {
+    const raw = this.context()
+    if (raw && typeof raw.then === 'function') {
+      return this._formHtmlResultAsync(raw, { ok, message, errors, fields, status })
+    }
+    return this._finishFormHtml(raw, { ok, message, errors, fields, status })
+  }
+
+  async _formHtmlResultAsync(raw, opts) {
+    const ctx = await raw
+    return this._finishFormHtml(ctx, opts)
+  }
+
+  _finishFormHtml(ctx, { ok, message, errors, fields, status }) {
+    const data = { ...(ctx || {}), ...fields, ok, message, errors: { ...errors }, fields: { ...fields } }
+    return this._htmlResponse(data, { status })
   }
 
   templateName() {
@@ -1855,6 +1945,7 @@ module.exports = {
   FusionApp,
   FusionBaseApi,
   FusionBaseTemplate,
+  parseFormBody,
   HTTPException,
   router,
   route,
