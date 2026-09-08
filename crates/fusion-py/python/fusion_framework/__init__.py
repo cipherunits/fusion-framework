@@ -15,7 +15,7 @@ from fusion_framework.middleware import (
     use,
 )
 from fusion_framework.pagination import PaginationParams, paginated_body, parse_pagination
-from fusion_framework.template import FusionBaseTemplate, render_template
+from fusion_framework.template import FusionBaseTemplate, parse_form_body, render_template
 from fusion_framework import cache
 from fusion_framework import tasks
 from . import header, status
@@ -41,5 +41,6 @@ __all__ = [
     "parse_pagination",
     "paginated_body",
     "FusionBaseTemplate",
+    "parse_form_body",
     "render_template",
 ]

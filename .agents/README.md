@@ -23,6 +23,8 @@ Each skill teaches domain-specific workflows for Fusion (Rust core + Python / No
 | `fusion-release` | Version bumps, manifests, publish prep |
 | `fusion-testing` | Running checks; investigating failed tests |
 | `fusion-cache` | Application cache (moka default; Redis later) |
+| `fusion-background-tasks` | Tokio spawn / cancel / status / snapshot |
+| `fusion-template-forms` | Template `form` / `ok` / `fail` + SPA `data-fusion-form` |
 
 ## Always-on rules
 

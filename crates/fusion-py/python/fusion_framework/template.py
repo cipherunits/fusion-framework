@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import inspect
+import json
 from pathlib import Path
 from typing import Any, ClassVar, Mapping, Optional, Union
+from urllib.parse import parse_qs
 
 from fusion_framework._fusion import render_template as _render_template
 from fusion_framework.api import FusionBaseApi
@@ -22,24 +24,43 @@ def render_template(
     return _render_template(template_name, dict(context or {}), root)
 
 
+def parse_form_body(body: str, content_type: str | None = None) -> dict[str, str]:
+    """Parse urlencoded or JSON body into flat string fields."""
+    raw = body or ""
+    ct = (content_type or "").lower()
+    if "application/json" in ct or (raw.lstrip().startswith("{") and "urlencoded" not in ct):
+        try:
+            data = json.loads(raw) if raw.strip() else {}
+        except json.JSONDecodeError:
+            data = {}
+        if isinstance(data, dict):
+            return {str(k): "" if v is None else str(v) for k, v in data.items()}
+        return {}
+    parsed = parse_qs(raw, keep_blank_values=True)
+    return {key: (values[0] if values else "") for key, values in parsed.items()}
+
+
 class FusionBaseTemplate(FusionBaseApi):
     """Class-based HTML handler using Tera templates.
 
-    Set ``template`` (or ``template_address``) to the file path under the templates
-    directory. Override ``context()`` to pass variables — sync or ``async def``.
-    The default ``get()`` renders HTML for browsers and returns ``context()`` as JSON
-    when the client sends ``Accept: application/json`` or ``?format=json``.
+    Mental model:
 
-    Template routes are mounted as HTTP handlers but are excluded from Swagger/OpenAPI.
+    - ``context()`` — **template data** (title, fields, …). Not an HTTP verb.
+    - ``get()`` — **HTTP GET**; renders ``context()`` as HTML (or JSON if client wants JSON).
+    - ``post()`` — **HTTP POST**; read ``self.form``, validate, return ``ok`` / ``fail``.
 
-    Built-in UI components are defined in ``fusion/macros.html`` (Tera 2 components)::
+    Form helpers (SPA-friendly)::
 
-        {{<fusion.button label="Save" href="/save" variant="primary" />}}
-        {{<fusion.badge label="Ready" variant="success" dot={true} />}}
-        {{<fusion.table headers={cols} rows={rows} page_size={10} />}}
+        def post(self):
+            form = self.form
+            if not form.get("phone"):
+                return self.fail({"phone": "required"}, **form)
+            return self.ok(message="saved", **form)
 
-    Include styles with ``{% include "fusion/components.css" %}`` or extend
-    ``fusion/base.html``.
+    With ``data-fusion-form`` + ``{% include "fusion/form.js" %}``, the browser
+    posts JSON and stays on the same page.
+
+    Template routes are excluded from Swagger/OpenAPI.
     """
 
     __fusion_template__ = True
@@ -52,12 +73,18 @@ class FusionBaseTemplate(FusionBaseApi):
         """Template variables (override in subclasses; may be ``async def``)."""
         return {}
 
-    def get(self) -> Any:
-        """Default GET — HTML page, or ``context()`` JSON when client wants JSON.
+    @property
+    def form(self) -> dict[str, str]:
+        """Parsed POST body (urlencoded or JSON) as flat string fields."""
+        content_type = None
+        for key, value in self.headers.items():
+            if key.lower() == "content-type":
+                content_type = str(value)
+                break
+        return parse_form_body(self.body, content_type)
 
-        Supports sync or async ``context()``; async returns an awaitable for the
-        framework event loop.
-        """
+    def get(self) -> Any:
+        """Default GET — HTML page, or ``context()`` JSON when client wants JSON."""
         raw = self.context()
         if inspect.isawaitable(raw):
             return self._get_async(raw)
@@ -74,6 +101,120 @@ class FusionBaseTemplate(FusionBaseApi):
         if self.wants_json():
             return data
         return self._html_response(data)
+
+    def fail(
+        self,
+        errors: Mapping[str, str] | None = None,
+        message: str | None = None,
+        **fields: Any,
+    ) -> Any:
+        """Validation failure — JSON for SPA fetch, else same template with errors.
+
+        Example::
+
+            return self.fail({"phone": "شماره لازم است"}, message="خطا", **form)
+        """
+        err = {str(k): str(v) for k, v in dict(errors or {}).items()}
+        form_fields = {str(k): "" if v is None else str(v) for k, v in fields.items()}
+        payload_message = message or "Validation failed"
+        if self.wants_json():
+            return self.response(
+                {
+                    "ok": False,
+                    "message": payload_message,
+                    "errors": err,
+                    "fields": form_fields,
+                },
+                status=400,
+            )
+        return self._form_html_result(
+            ok=False,
+            message=payload_message,
+            errors=err,
+            fields=form_fields,
+            status=400,
+        )
+
+    def ok(self, message: str | None = None, **fields: Any) -> Any:
+        """Success — JSON for SPA fetch, else same template with ``ok=true``.
+
+        Example::
+
+            return self.ok(message="ثبت شد", **form)
+        """
+        form_fields = {str(k): "" if v is None else str(v) for k, v in fields.items()}
+        payload_message = message or "OK"
+        if self.wants_json():
+            return self.response(
+                {
+                    "ok": True,
+                    "message": payload_message,
+                    "errors": {},
+                    "fields": form_fields,
+                },
+                status=200,
+            )
+        return self._form_html_result(
+            ok=True,
+            message=payload_message,
+            errors={},
+            fields=form_fields,
+            status=200,
+        )
+
+    def _form_html_result(
+        self,
+        *,
+        ok: bool,
+        message: str,
+        errors: Mapping[str, str],
+        fields: Mapping[str, str],
+        status: int,
+    ) -> Any:
+        """Merge form result into ``context()`` and re-render the same template."""
+        raw = self.context()
+        if inspect.isawaitable(raw):
+            return self._form_html_result_async(
+                raw, ok=ok, message=message, errors=errors, fields=fields, status=status
+            )
+        return self._finish_form_html(
+            raw, ok=ok, message=message, errors=errors, fields=fields, status=status
+        )
+
+    async def _form_html_result_async(
+        self,
+        raw: Any,
+        *,
+        ok: bool,
+        message: str,
+        errors: Mapping[str, str],
+        fields: Mapping[str, str],
+        status: int,
+    ) -> dict[str, Any]:
+        """Await async context then finish form HTML."""
+        ctx = await raw
+        return self._finish_form_html(
+            ctx, ok=ok, message=message, errors=errors, fields=fields, status=status
+        )
+
+    def _finish_form_html(
+        self,
+        ctx: Any,
+        *,
+        ok: bool,
+        message: str,
+        errors: Mapping[str, str],
+        fields: Mapping[str, str],
+        status: int,
+    ) -> dict[str, Any]:
+        """Apply form result onto context and render HTML."""
+        data = dict(ctx or {})
+        data.update(fields)
+        data["ok"] = ok
+        data["message"] = message
+        data["errors"] = dict(errors)
+        data["fields"] = dict(fields)
+        return self._html_response(data, status=status)
 
     def template_name(self) -> str:
         """Resolved template path (override for dynamic templates)."""
@@ -168,4 +309,4 @@ class FusionBaseTemplate(FusionBaseApi):
         return self.response(html, status=status, headers=hdrs)
 
 
-__all__ = ["FusionBaseTemplate", "render_template"]
+__all__ = ["FusionBaseTemplate", "render_template", "parse_form_body"]
