@@ -489,15 +489,20 @@ public static class Middleware
         };
     }
 
+    /// <summary>
+    /// Merge middleware headers into a response envelope. Existing headers win on key conflict.
+    /// Accepts string or object-valued header maps so template content-type is not dropped.
+    /// </summary>
     internal static object MergeResponseHeaders(object? result, IReadOnlyDictionary<string, string> extra)
     {
         if (result is Dictionary<string, object?> dict)
         {
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var kv in extra) headers[kv.Key] = kv.Value;
-            if (dict.TryGetValue("headers", out var existing) && existing is IDictionary<string, string> map)
+            if (dict.TryGetValue("headers", out var existing) && existing is not null)
             {
-                foreach (var kv in map) headers[kv.Key] = kv.Value;
+                foreach (var kv in CoerceHeaderMap(existing))
+                    headers[kv.Key] = kv.Value;
             }
             dict["headers"] = headers;
             return dict;
@@ -509,6 +514,46 @@ public static class Middleware
             ["body"] = result,
             ["headers"] = new Dictionary<string, string>(extra, StringComparer.OrdinalIgnoreCase),
         };
+    }
+
+    /// <summary>Normalize envelope headers from string or object dictionaries to string pairs.</summary>
+    static IEnumerable<KeyValuePair<string, string>> CoerceHeaderMap(object existing)
+    {
+        if (existing is IDictionary<string, string> map)
+        {
+            foreach (var kv in map)
+                yield return kv;
+            yield break;
+        }
+
+        if (existing is IDictionary<string, object?> objNullable)
+        {
+            foreach (var kv in objNullable)
+            {
+                if (kv.Value is null) continue;
+                yield return new KeyValuePair<string, string>(kv.Key, kv.Value.ToString() ?? "");
+            }
+            yield break;
+        }
+
+        if (existing is IDictionary<string, object> objMap)
+        {
+            foreach (var kv in objMap)
+            {
+                if (kv.Value is null) continue;
+                yield return new KeyValuePair<string, string>(kv.Key, kv.Value.ToString() ?? "");
+            }
+            yield break;
+        }
+
+        if (existing is System.Collections.IDictionary idict)
+        {
+            foreach (System.Collections.DictionaryEntry entry in idict)
+            {
+                if (entry.Key is not string key || entry.Value is null) continue;
+                yield return new KeyValuePair<string, string>(key, entry.Value.ToString() ?? "");
+            }
+        }
     }
 
     static object Error(int status, string detail) =>

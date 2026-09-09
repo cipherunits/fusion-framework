@@ -464,7 +464,7 @@ internal static class SwaggerDocs
     </style>
 """
             : "";
-        var standalone = needsStandalone && File.Exists(Path.Combine(AssetsDirectory(), "swagger-ui-standalone-preset.js"))
+        var standalone = needsStandalone && TryLoadSwaggerAsset("swagger-ui-standalone-preset.js") is not null
             ? $"""<script src="{AssetUrl(swagger.Path, "swagger-ui-standalone-preset.js")}"></script>"""
             : "";
         var navbarJs = needsStandalone ? "true" : "false";
@@ -514,6 +514,7 @@ internal static class SwaggerDocs
         ("swagger-ui.css", "text/css; charset=utf-8"),
     ];
 
+    /// <summary>Directory next to the assembly (ProjectReference / copy-to-output layouts).</summary>
     static string AssetsDirectory()
     {
         var asmDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -524,15 +525,38 @@ internal static class SwaggerDocs
 
     static string AssetUrl(string prefix, string name) => $"{prefix}/assets/{name}";
 
+    /// <summary>
+    /// Load a Swagger UI asset from embedded resources (NuGet) or disk next to the DLL.
+    /// SDK embeds folder segments with '_' (static/swagger-ui → static.swagger_ui).
+    /// </summary>
+    internal static string? TryLoadSwaggerAsset(string name)
+    {
+        var asm = Assembly.GetExecutingAssembly();
+        var resourceName = asm.GetManifestResourceNames()
+            .FirstOrDefault(n =>
+                n.EndsWith($".{name}", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+        if (resourceName is not null)
+        {
+            using var stream = asm.GetManifestResourceStream(resourceName);
+            if (stream is not null)
+            {
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            }
+        }
+
+        var filePath = Path.Combine(AssetsDirectory(), name);
+        return File.Exists(filePath) ? File.ReadAllText(filePath) : null;
+    }
+
     static void MountAssets(FusionApp app, string prefix)
     {
-        var dir = AssetsDirectory();
         foreach (var (name, contentType) in SwaggerAssetFiles)
         {
-            var filePath = Path.Combine(dir, name);
-            if (!File.Exists(filePath))
+            var body = TryLoadSwaggerAsset(name);
+            if (body is null)
                 continue;
-            var body = File.ReadAllText(filePath);
             app.AddRawRoute("GET", $"{prefix}/assets/{name}", () => new Dictionary<string, object?>
             {
                 ["status"] = 200,

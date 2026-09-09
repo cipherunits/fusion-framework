@@ -90,7 +90,7 @@ public static class Header
             {
                 ["X-Powered-By"] = "Fusion Framework",
                 ["X-Framework"] = "Fusion",
-                ["X-Fusion-Version"] = "2.0.0",
+                ["X-Fusion-Version"] = "2.0.1",
             };
         }
     }
