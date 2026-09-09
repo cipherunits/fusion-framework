@@ -3,37 +3,136 @@
 {% block head %}
 <meta http-equiv="refresh" content="5" />
 <style>
-  .fusion-monitor { max-width: 960px; margin: 0 auto; }
+  .fusion-monitor {
+    --mon-text: oklch(0.18 0 0);
+    --mon-text-soft: oklch(0.4 0 0);
+    --mon-label: oklch(0.28 0 0);
+    max-width: 56rem;
+    margin: 0 auto;
+    padding: var(--spacing-8) var(--spacing-6) var(--spacing-12);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-6);
+    color: var(--mon-text);
+  }
+
+  .dark .fusion-monitor {
+    --mon-text: oklch(0.98 0 0);
+    --mon-text-soft: oklch(0.86 0 0);
+    --mon-label: oklch(0.92 0 0);
+  }
+
   .fusion-monitor__header {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.75rem 1rem;
-    margin-bottom: 1.5rem;
+    gap: var(--spacing-3) var(--spacing-4);
   }
+
   .fusion-monitor__header h1 {
     margin: 0;
-    font-size: 1.5rem;
-    font-weight: 650;
+    font-family: var(--font-sans);
+    font-size: calc(var(--text-lg) + 0.15rem);
+    font-weight: var(--font-weight-semibold);
     letter-spacing: -0.02em;
+    color: var(--mon-text);
   }
+
   .fusion-monitor__meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    align-items: center;
+    gap: var(--spacing-2);
     margin-left: auto;
   }
-  .fusion-monitor__section { margin-bottom: 1.75rem; }
+
+  .fusion-monitor .fusion-badge {
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .fusion-monitor .fusion-badge--default {
+    color: var(--mon-text);
+    background: color-mix(in oklch, var(--muted) 85%, var(--card));
+  }
+
+  .dark .fusion-monitor .fusion-badge--default {
+    color: oklch(0.96 0 0);
+    background: oklch(0.32 0 0);
+  }
+
+  .fusion-monitor .fusion-badge--success {
+    color: #15803d;
+    background: #dcfce7;
+  }
+
+  .dark .fusion-monitor .fusion-badge--success {
+    color: #bbf7d0;
+    background: #14532d;
+  }
+
+  .fusion-monitor .fusion-badge--success .fusion-badge__dot {
+    background: #22c55e;
+  }
+
+  .dark .fusion-monitor .fusion-badge--success .fusion-badge__dot {
+    background: #4ade80;
+  }
+
+  .fusion-monitor__panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-4);
+    padding: var(--spacing-5);
+    background: var(--card);
+    border: var(--border-width) solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .fusion-monitor__panel-title {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--mon-label);
+  }
+
+  .fusion-monitor__empty {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--mon-text-soft);
+  }
+
   .fusion-monitor__actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
+    gap: var(--spacing-2);
   }
-  .fusion-monitor__empty {
-    color: #64748b;
-    font-size: 0.95rem;
-    margin: 0.5rem 0 0;
+
+  .fusion-monitor .fusion-table-wrap {
+    margin: 0;
+  }
+
+  .fusion-monitor .fusion-table {
+    color: var(--mon-text);
+  }
+
+  .fusion-monitor .fusion-table caption {
+    color: var(--mon-label);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .fusion-monitor .fusion-table th {
+    color: var(--mon-label);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .fusion-monitor .fusion-table td {
+    color: var(--mon-text-soft);
+  }
+
+  .fusion-monitor .fusion-table tbody tr:hover td {
+    color: var(--mon-text);
   }
 </style>
 {% endblock %}
@@ -46,40 +145,43 @@
       {{<fusion.badge label={entry_badge} variant="default" />}}
       {{<fusion.badge label={event_badge} variant="default" />}}
       {{<fusion.badge label={task_badge} variant="default" />}}
+      <button type="button" class="fusion-theme-toggle" data-fusion-theme-toggle aria-pressed="false">
+        <span data-theme-label>Dark</span>
+      </button>
     </div>
   </div>
 
-  {% <fusion.card title="Live entries"> %}
+  <section class="fusion-monitor__panel" aria-labelledby="monitor-entries">
+    <h2 class="fusion-monitor__panel-title" id="monitor-entries">Live entries</h2>
     {% if empty_entries %}
     <p class="fusion-monitor__empty">No keys in the process-wide cache.</p>
     {% else %}
-    {{<fusion.table headers={entry_headers} rows={entry_rows} caption="Current cache keys" page_size={10} />}}
+    {{<fusion.table headers={entry_headers} rows={entry_rows} caption="Current cache keys" page_size={10} widths={["36%", "40%", "120px"]} />}}
     {% endif %}
-  {% </fusion.card> %}
+  </section>
 
-  <div class="fusion-monitor__section"></div>
-
-  {% <fusion.card title="Recent activity"> %}
+  <section class="fusion-monitor__panel" aria-labelledby="monitor-events">
+    <h2 class="fusion-monitor__panel-title" id="monitor-events">Recent activity</h2>
     {% if empty_events %}
     <p class="fusion-monitor__empty">No set / delete / clear events yet.</p>
     {% else %}
-    {{<fusion.table headers={event_headers} rows={event_rows} caption="Recent cache mutations" page_size={10} />}}
+    {{<fusion.table headers={event_headers} rows={event_rows} caption="Recent cache mutations" page_size={10} widths={["20%", "45%", "140px"]} />}}
     {% endif %}
-  {% </fusion.card> %}
+  </section>
 
-  <div class="fusion-monitor__section"></div>
-
-  {% <fusion.card title="Background tasks"> %}
+  <section class="fusion-monitor__panel" aria-labelledby="monitor-tasks">
+    <h2 class="fusion-monitor__panel-title" id="monitor-tasks">Background tasks</h2>
     {% if empty_tasks %}
     <p class="fusion-monitor__empty">No process-wide Tokio background tasks tracked yet.</p>
     {% else %}
-    {{<fusion.table headers={task_headers} rows={task_rows} caption="Background tasks" page_size={10} />}}
+    {{<fusion.table headers={task_headers} rows={task_rows} caption="Background tasks" page_size={10} widths={["28%", "18%", "22%", ""]} />}}
     {% endif %}
-  {% </fusion.card> %}
+  </section>
 
   <div class="fusion-monitor__actions">
     {{<fusion.button label="Refresh" href={path} variant="primary" />}}
     {{<fusion.button label="JSON snapshot" href={json_path} variant="secondary" />}}
+    {{<fusion.button label="Components" href="/__fusion/component" variant="link" />}}
   </div>
 </div>
 {% endblock %}

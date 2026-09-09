@@ -412,6 +412,9 @@ class FusionApp:
             from fusion_framework.monitor import mount_monitor
 
             mount_monitor(self._engine, self.settings)
+            from fusion_framework.ui import mount_component_gallery
+
+            mount_component_gallery(self._engine, self.settings)
             self._mounted = True
         host = host if host is not None else self.settings.host
         port = port if port is not None else self.settings.port

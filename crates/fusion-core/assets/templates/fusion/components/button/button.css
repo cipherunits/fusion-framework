@@ -1,0 +1,105 @@
+/* Button — shadcn-aligned modes: primary, secondary, danger, link. */
+
+.fusion-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  height: var(--control-height);
+  padding: 0 var(--spacing-4);
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-tight);
+  text-decoration: none;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  border: var(--border-width) solid transparent;
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.fusion-btn:focus-visible {
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 var(--ring-width) color-mix(in oklch, var(--ring) 25%, transparent);
+}
+
+.fusion-btn:disabled,
+.fusion-btn[aria-disabled="true"] {
+  opacity: var(--opacity-disabled);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.fusion-btn--primary {
+  color: var(--primary-foreground);
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.fusion-btn--primary:hover:not(:disabled):not([aria-disabled="true"]) {
+  background-color: color-mix(in oklch, var(--primary) 88%, var(--foreground));
+  border-color: color-mix(in oklch, var(--primary) 88%, var(--foreground));
+}
+
+.fusion-btn--secondary {
+  color: var(--secondary-foreground);
+  background-color: var(--secondary);
+  border-color: var(--border);
+}
+
+.fusion-btn--secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--ring);
+}
+
+.fusion-btn--danger {
+  color: var(--destructive-foreground);
+  background-color: var(--destructive);
+  border-color: var(--destructive);
+}
+
+.fusion-btn--danger:hover:not(:disabled):not([aria-disabled="true"]) {
+  background-color: color-mix(in oklch, var(--destructive) 88%, black);
+  border-color: color-mix(in oklch, var(--destructive) 88%, black);
+}
+
+.fusion-btn--danger:focus-visible {
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 var(--ring-width) color-mix(in oklch, var(--destructive) 25%, transparent);
+}
+
+/* Link mode — text action, no filled chrome. */
+.fusion-btn--link {
+  height: auto;
+  min-height: var(--control-height);
+  padding: 0 var(--spacing-1);
+  color: var(--primary);
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  text-underline-offset: 0.2em;
+}
+
+.fusion-btn--link:hover:not(:disabled):not([aria-disabled="true"]) {
+  color: var(--foreground);
+  text-decoration: underline;
+  background-color: transparent;
+}
+
+.fusion-btn--link:focus-visible {
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 var(--ring-width) color-mix(in oklch, var(--ring) 25%, transparent);
+}

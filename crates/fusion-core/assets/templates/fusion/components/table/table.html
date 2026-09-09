@@ -1,0 +1,185 @@
+{# Fusion Table — data grid with optional column widths, resize, and paging.
+   Usage:
+     {{<fusion.table headers={cols} rows={rows} caption="Routes" />}}
+     {{<fusion.table headers={cols} rows={rows} widths={sizes} resizable={true} page_size={10} />}}
+   `widths` is a parallel array of CSS sizes (e.g. "180px", "40%", "12rem"). Empty = auto.
+   Drag the header edge handles when resizable={true} (default) to tune column sizes.
+#}
+{% component fusion.table(
+  headers: array = [],
+  rows: array = [],
+  caption: string = "",
+  page_size: number = 0,
+  widths: array = [],
+  resizable: bool = true,
+  class: string = ""
+) %}
+<div
+  class="fusion-table-wrap{% if class %} {{ class }}{% endif %}"
+  data-fusion-table
+  {% if page_size > 0 %}data-page-size="{{ page_size }}"{% endif %}
+  {% if resizable %}data-resizable="true"{% endif %}
+>
+  <div class="fusion-table-scroll">
+    <table class="fusion-table{% if resizable or widths %} fusion-table--sized{% endif %}">
+      {% if caption %}<caption>{{ caption }}</caption>{% endif %}
+      {% if headers %}
+      <colgroup>
+        {% for h in headers %}
+        {%- set col_width = "" -%}
+        {%- if widths and widths[loop.index0] -%}{%- set col_width = widths[loop.index0] -%}{%- endif -%}
+        <col{% if col_width %} style="width: {{ col_width }}"{% endif %} data-fusion-col />
+        {% endfor %}
+      </colgroup>
+      <thead>
+        <tr>
+          {% for h in headers %}
+          {%- set col_width = "" -%}
+          {%- if widths and widths[loop.index0] -%}{%- set col_width = widths[loop.index0] -%}{%- endif -%}
+          <th scope="col"{% if col_width %} style="width: {{ col_width }}"{% endif %}>
+            <span class="fusion-table__head">
+              <span class="fusion-table__label">{{ h }}</span>
+              {% if resizable and not loop.last %}
+              <span
+                class="fusion-table__resize"
+                data-fusion-col-resize
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize column"
+                tabindex="0"
+              ></span>
+              {% endif %}
+            </span>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      {% endif %}
+      <tbody>
+        {% for row in rows %}
+        <tr{% if page_size > 0 %} data-fusion-row{% endif %}>
+          {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+        {{ body | safe }}
+      </tbody>
+    </table>
+  </div>
+  {% if page_size > 0 %}
+  <nav class="fusion-table-pager" aria-label="Table pagination" hidden>
+    <button type="button" class="fusion-table-pager__btn" data-fusion-prev>Previous</button>
+    <span class="fusion-table-pager__status" data-fusion-status></span>
+    <button type="button" class="fusion-table-pager__btn" data-fusion-next>Next</button>
+  </nav>
+  {% endif %}
+</div>
+{% if page_size > 0 or resizable %}
+<script>
+(function () {
+  var script = document.currentScript;
+  var wrap = script && script.previousElementSibling;
+  if (!wrap || !wrap.getAttribute || wrap.getAttribute("data-fusion-table") == null) return;
+  if (typeof window.__fusionInitTable === "function") {
+    window.__fusionInitTable(wrap);
+    return;
+  }
+  /** Paginate rows and wire header drag-resize for one table wrap. */
+  function initTable(root) {
+    if (!root || root.getAttribute("data-fusion-ready") === "true") return;
+    root.setAttribute("data-fusion-ready", "true");
+    var size = parseInt(root.getAttribute("data-page-size") || "0", 10);
+    var rows = root.querySelectorAll("tbody tr[data-fusion-row]");
+    var pager = root.querySelector(".fusion-table-pager");
+    var status = root.querySelector("[data-fusion-status]");
+    var prev = root.querySelector("[data-fusion-prev]");
+    var next = root.querySelector("[data-fusion-next]");
+    if (size > 0 && pager && status && prev && next && rows.length > 0) {
+      var page = 0;
+      var pages = Math.max(1, Math.ceil(rows.length / size));
+      function renderPage() {
+        var start = page * size;
+        var end = start + size;
+        for (var i = 0; i < rows.length; i++) {
+          rows[i].hidden = i < start || i >= end;
+        }
+        status.textContent = "Page " + (page + 1) + " / " + pages + " · " + rows.length + " rows";
+        prev.disabled = page <= 0;
+        next.disabled = page >= pages - 1;
+        pager.hidden = pages <= 1;
+      }
+      prev.addEventListener("click", function () {
+        if (page > 0) {
+          page -= 1;
+          renderPage();
+        }
+      });
+      next.addEventListener("click", function () {
+        if (page < pages - 1) {
+          page += 1;
+          renderPage();
+        }
+      });
+      renderPage();
+    }
+
+    if (root.getAttribute("data-resizable") !== "true") return;
+    var table = root.querySelector(".fusion-table");
+    var cols = root.querySelectorAll("colgroup col[data-fusion-col]");
+    var handles = root.querySelectorAll("[data-fusion-col-resize]");
+    if (!table || !cols.length || !handles.length) return;
+    table.classList.add("fusion-table--sized");
+
+    function startResize(handle, clientX) {
+      var th = handle.closest("th");
+      if (!th) return;
+      var index = Array.prototype.indexOf.call(th.parentNode.children, th);
+      var col = cols[index];
+      if (!col) return;
+      var startX = clientX;
+      var startW = th.getBoundingClientRect().width;
+      root.classList.add("fusion-table-wrap--resizing");
+      handle.classList.add("fusion-table__resize--active");
+
+      function onMove(ev) {
+        var nextW = Math.max(72, startW + (ev.clientX - startX));
+        var px = nextW + "px";
+        col.style.width = px;
+        th.style.width = px;
+      }
+      function onUp() {
+        root.classList.remove("fusion-table-wrap--resizing");
+        handle.classList.remove("fusion-table__resize--active");
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    }
+
+    handles.forEach(function (handle) {
+      handle.addEventListener("mousedown", function (ev) {
+        ev.preventDefault();
+        startResize(handle, ev.clientX);
+      });
+      handle.addEventListener("keydown", function (ev) {
+        if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+        ev.preventDefault();
+        var th = handle.closest("th");
+        if (!th) return;
+        var index = Array.prototype.indexOf.call(th.parentNode.children, th);
+        var col = cols[index];
+        if (!col) return;
+        var current = th.getBoundingClientRect().width;
+        var delta = ev.key === "ArrowRight" ? 16 : -16;
+        var px = Math.max(72, current + delta) + "px";
+        col.style.width = px;
+        th.style.width = px;
+      });
+    });
+  }
+  window.__fusionInitTable = initTable;
+  initTable(wrap);
+})();
+</script>
+{% endif %}
+{% endcomponent fusion.table %}

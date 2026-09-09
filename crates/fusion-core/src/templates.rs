@@ -10,9 +10,23 @@ use tera::{Context, Tera};
 const BUILTIN_MACROS: &str = include_str!("../assets/templates/fusion/macros.html");
 const BUILTIN_BASE: &str = include_str!("../assets/templates/fusion/base.html");
 const BUILTIN_COMPONENTS_CSS: &str =
-    include_str!("../assets/templates/fusion/components.css");
+    include_str!("../assets/templates/fusion/components/components.css");
+const BUILTIN_GLOBAL_CSS: &str = include_str!("../assets/templates/fusion/global.css");
+const BUILTIN_BUTTON_CSS: &str =
+    include_str!("../assets/templates/fusion/components/button/button.css");
+const BUILTIN_TABLE_CSS: &str =
+    include_str!("../assets/templates/fusion/components/table/table.css");
+const BUILTIN_TABLE_JS: &str =
+    include_str!("../assets/templates/fusion/components/table/table.js");
 const BUILTIN_MONITOR: &str = include_str!("../assets/templates/fusion/monitor.html");
 const BUILTIN_FORM_JS: &str = include_str!("../assets/templates/fusion/form.js");
+const BUILTIN_TABLE: &str =
+    include_str!("../assets/templates/fusion/components/table/table.html");
+const BUILTIN_TOAST: &str =
+    include_str!("../assets/templates/fusion/components/toast/toast.html");
+const BUILTIN_MODAL: &str =
+    include_str!("../assets/templates/fusion/components/modal/modal.html");
+const BUILTIN_HOME: &str = include_str!("../assets/templates/fusion/index.html");
 
 static ENGINE_CACHE: Mutex<Option<EngineCache>> = Mutex::new(None);
 
@@ -63,8 +77,29 @@ fn build_engine(root: &Path) -> Result<Tera, String> {
         ("fusion/macros.html".to_string(), BUILTIN_MACROS.to_string()),
         ("fusion/base.html".to_string(), BUILTIN_BASE.to_string()),
         (
+            "fusion/global.css".to_string(),
+            BUILTIN_GLOBAL_CSS.to_string(),
+        ),
+        // Canonical location + legacy alias for older templates.
+        (
+            "fusion/components/components.css".to_string(),
+            BUILTIN_COMPONENTS_CSS.to_string(),
+        ),
+        (
             "fusion/components.css".to_string(),
             BUILTIN_COMPONENTS_CSS.to_string(),
+        ),
+        (
+            "fusion/components/button/button.css".to_string(),
+            BUILTIN_BUTTON_CSS.to_string(),
+        ),
+        (
+            "fusion/components/table/table.css".to_string(),
+            BUILTIN_TABLE_CSS.to_string(),
+        ),
+        (
+            "fusion/components/table/table.js".to_string(),
+            BUILTIN_TABLE_JS.to_string(),
         ),
         (
             "fusion/monitor.html".to_string(),
@@ -78,6 +113,26 @@ fn build_engine(root: &Path) -> Result<Tera, String> {
         (
             "fusion/form.js".to_string(),
             BUILTIN_FORM_JS.to_string(),
+        ),
+        (
+            "fusion/components/table/table.html".to_string(),
+            BUILTIN_TABLE.to_string(),
+        ),
+        (
+            "fusion/components/toast/toast.html".to_string(),
+            BUILTIN_TOAST.to_string(),
+        ),
+        (
+            "fusion/components/modal/modal.html".to_string(),
+            BUILTIN_MODAL.to_string(),
+        ),
+        (
+            "fusion/index.html".to_string(),
+            BUILTIN_HOME.to_string(),
+        ),
+        (
+            "fusion/home.html".to_string(),
+            BUILTIN_HOME.to_string(),
         ),
     ];
 
@@ -132,7 +187,7 @@ pub fn builtin_components() -> HashMap<&'static str, &'static str> {
     HashMap::from([
         (
             "button",
-            "{{<fusion.button label=\"...\" href=\"...\" variant=\"primary\" />}}",
+            "{{<fusion.button label=\"...\" href=\"...\" variant=\"primary|secondary|danger|link\" />}}",
         ),
         ("link", "{{<fusion.link label=\"...\" href=\"...\" />}}"),
         ("card", "{{<fusion.card title=\"...\" content=\"...\" />}}"),
@@ -146,7 +201,15 @@ pub fn builtin_components() -> HashMap<&'static str, &'static str> {
         ),
         (
             "table",
-            "{{<fusion.table headers={cols} rows={rows} caption=\"...\" page_size={10} />}}",
+            "{{<fusion.table headers={cols} rows={rows} widths={sizes} caption=\"...\" page_size={10} resizable={true} />}}",
+        ),
+        (
+            "toast",
+            "{{<fusion.toast position=\"top-center\" />}}  /* then FusionToast.show(msg, { position, variant }) */",
+        ),
+        (
+            "modal",
+            "{{<fusion.modal variant=\"warning\" title=\"...\" size=\"md\" animation=\"scale\" duration={220} />}}",
         ),
     ])
 }
@@ -205,10 +268,12 @@ mod tests {
         )
         .unwrap();
         assert!(html.contains("fusion-table"));
-        assert!(html.contains("<th scope=\"col\">Name</th>"));
+        assert!(html.contains("fusion-table__label"));
+        assert!(html.contains("Name"));
         assert!(html.contains("<td>Widget</td>"));
         assert!(html.contains("Products"));
-        assert!(!html.contains("fusion-table-pager"));
+        assert!(!html.contains("class=\"fusion-table-pager\""));
+        assert!(html.contains("data-fusion-table"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -235,6 +300,74 @@ mod tests {
         assert!(html.contains("fusion-table-pager"));
         assert!(html.contains("data-fusion-prev"));
         assert!(html.contains("data-fusion-next"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_table_with_column_widths() {
+        clear_template_cache();
+        let tpl = r#"{{<fusion.table headers={headers} rows={rows} widths={widths} resizable={true} />}}"#;
+        let dir = std::env::temp_dir().join("fusion_tpl_table_widths_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.html"), tpl).unwrap();
+        let html = render_template(
+            "test.html",
+            &json!({
+                "headers": ["Route", "Method"],
+                "rows": [["/health", "GET"]],
+                "widths": ["40%", "120px"],
+            }),
+            &dir,
+        )
+        .unwrap();
+        assert!(html.contains("fusion-table--sized"));
+        assert!(html.contains("data-resizable=\"true\""));
+        assert!(html.contains("width: 40%"));
+        assert!(html.contains("width: 120px"));
+        assert!(html.contains("data-fusion-col-resize"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_toast_host_with_six_positions() {
+        clear_template_cache();
+        let tpl = r#"{{<fusion.toast position="bottom-right" duration={2000} />}}"#;
+        let dir = std::env::temp_dir().join("fusion_tpl_toast_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.html"), tpl).unwrap();
+        let html = render_template("test.html", &json!({}), &dir).unwrap();
+        assert!(html.contains("data-fusion-toaster"));
+        assert!(html.contains("data-default-position=\"bottom-right\""));
+        assert!(html.contains("data-default-duration=\"2000\""));
+        assert!(html.contains("data-position=\"top-left\""));
+        assert!(html.contains("data-position=\"top-center\""));
+        assert!(html.contains("data-position=\"top-right\""));
+        assert!(html.contains("data-position=\"bottom-left\""));
+        assert!(html.contains("data-position=\"bottom-center\""));
+        assert!(html.contains("data-position=\"bottom-right\""));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renders_modal_with_variant_size_animation() {
+        clear_template_cache();
+        let tpl = r#"{{<fusion.modal id="confirm" variant="warning" title="Delete?" message="Sure?" size="lg" animation="slide" duration={300} />}}"#;
+        let dir = std::env::temp_dir().join("fusion_tpl_modal_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("test.html"), tpl).unwrap();
+        let html = render_template("test.html", &json!({}), &dir).unwrap();
+        assert!(html.contains("data-fusion-modal"));
+        assert!(html.contains("id=\"confirm\""));
+        assert!(html.contains("data-variant=\"warning\""));
+        assert!(html.contains("data-size=\"lg\""));
+        assert!(html.contains("data-animation=\"slide\""));
+        assert!(html.contains("data-duration=\"300\""));
+        assert!(html.contains("Delete?"));
+        assert!(html.contains("Sure?"));
+        assert!(html.contains("fusion-modal__dialog--warning"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -322,6 +455,22 @@ mod tests {
         let html = render_template("test.html", &json!({}), &dir).unwrap();
         assert!(html.contains(".fusion-btn"));
         assert!(html.contains(".fusion-table"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn includes_components_css_from_components_folder() {
+        clear_template_cache();
+        let dir = std::env::temp_dir().join("fusion_tpl_components_folder_css_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("test.html"),
+            r#"<style>{% include "fusion/components/components.css" %}</style>"#,
+        )
+        .unwrap();
+        let html = render_template("test.html", &json!({}), &dir).unwrap();
+        assert!(html.contains(".fusion-badge"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
