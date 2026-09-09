@@ -119,7 +119,9 @@ C# (`asp-core`): `main.cs`, `*.csproj` (`net10.0`), `[Route]` / `[HttpGet]`.
 
 - `FusionBaseTemplate` at `/` (Tera templates; **not** listed in Swagger).
 - HTML forms: `form` / `ok` / `fail` + optional `data-fusion-form` (see skill `fusion-template-forms`).
-- Welcome UI via built-in components: `fusion.badge`, `fusion.button`, `fusion.card`, `fusion.table` (optional `page_size={10}` for client-side row pagination; styles: `{% include "fusion/components.css" %}`).
+- Welcome UI via built-in components: `fusion.badge`, `fusion.button`, `fusion.card`, `fusion.table` (optional `page_size={10}` for client-side row pagination; styles: `{% include "fusion/components/components.css" %}` or legacy `fusion/components.css`).
+- Component gallery (when assets on disk): `/__fusion/component`
+- Monitor (when `monitor.enabled`): `/__fusion/monitor`
 - `FusionBaseApi` at `api/[module]` with `version="v1"` → `/v1/api/product/…`.
 - Convention verbs (`get` / `post` / …) plus one custom slot (`http_get` / `httpGet` / `[HttpGet]` with `[action]`).
 - Opt-in middleware list in `main` (e.g. `request_id`, `cors`, `cache_headers`, `security_headers`, `framework_headers`). Framework does **not** auto-enable middleware; the scaffold opts in.

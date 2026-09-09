@@ -4,19 +4,100 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}{{ title | default(value="Fusion") }}{% endblock %}</title>
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem("fusion-theme");
+        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (stored === "dark" || (!stored && prefersDark)) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      } catch (_) {}
+    })();
+  </script>
   <style>
+    {% include "fusion/global.css" %}
+    {% include "fusion/components/components.css" %}
+    {% include "fusion/components/button/button.css" %}
+    {% include "fusion/components/table/table.css" %}
+
     body {
-      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       margin: 0;
-      padding: 2rem;
-      color: #0f172a;
-      background: #f8fafc;
+      min-height: 100vh;
+      padding: 0;
+      font-family: var(--font-sans);
+      color: var(--foreground);
+      background: var(--background);
+      transition:
+        background-color var(--transition-fast),
+        color var(--transition-fast);
     }
-    {% include "fusion/components.css" %}
+
+    .fusion-theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-2);
+      height: var(--control-height);
+      padding: 0 var(--spacing-3);
+      margin: 0;
+      font-family: var(--font-sans);
+      font-size: var(--text-sm);
+      font-weight: var(--font-weight-medium);
+      line-height: var(--leading-tight);
+      color: var(--foreground);
+      background: var(--card);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-xs);
+      cursor: pointer;
+      outline: none;
+      transition:
+        background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+    }
+
+    .fusion-theme-toggle:hover {
+      border-color: var(--ring);
+      background: var(--accent);
+      color: var(--accent-foreground);
+    }
+
+    .fusion-theme-toggle:focus-visible {
+      box-shadow:
+        var(--shadow-xs),
+        0 0 0 var(--ring-width) color-mix(in oklch, var(--ring) 25%, transparent);
+    }
   </style>
   {% block head %}{% endblock %}
 </head>
 <body>
   {% block content %}{% endblock %}
+  <script>{% include "fusion/components/table/table.js" %}</script>
+  <script>
+    (function () {
+      /** Sync theme toggle label/pressed state with <html class="dark">. */
+      function syncFusionThemeToggle(btn) {
+        var dark = document.documentElement.classList.contains("dark");
+        btn.setAttribute("aria-pressed", dark ? "true" : "false");
+        var label = btn.querySelector("[data-theme-label]");
+        if (label) label.textContent = dark ? "Light" : "Dark";
+      }
+
+      document.querySelectorAll("[data-fusion-theme-toggle]").forEach(function (btn) {
+        syncFusionThemeToggle(btn);
+        btn.addEventListener("click", function () {
+          var next = document.documentElement.classList.toggle("dark") ? "dark" : "light";
+          try {
+            localStorage.setItem("fusion-theme", next);
+          } catch (_) {}
+          syncFusionThemeToggle(btn);
+        });
+      });
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
 </body>
 </html>

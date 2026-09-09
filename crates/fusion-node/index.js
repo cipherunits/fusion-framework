@@ -1197,6 +1197,90 @@ function mountMonitor(engine, settingsInstance) {
 /** @deprecated Use mountMonitor */
 const mountCacheMonitor = mountMonitor
 
+const DEFAULT_COMPONENT_PATH = '/__fusion/component'
+
+/** Locate fusion-core UI assets (components.html + CSS/JS) on disk. */
+function resolveFusionUiAssets() {
+  const candidates = [
+    path.join(__dirname, '..', 'fusion-core', 'assets', 'templates', 'fusion'),
+    path.join(process.cwd(), 'crates', 'fusion-core', 'assets', 'templates', 'fusion'),
+    path.join(process.cwd(), '..', 'crates', 'fusion-core', 'assets', 'templates', 'fusion'),
+  ]
+  for (const candidate of candidates) {
+    if (fs.existsSync(path.join(candidate, 'components.html'))) {
+      return candidate
+    }
+  }
+  return null
+}
+
+/** Guess Content-Type for a gallery asset. */
+function fusionUiContentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase()
+  if (ext === '.html') return 'text/html; charset=utf-8'
+  if (ext === '.css') return 'text/css; charset=utf-8'
+  if (ext === '.js') return 'application/javascript; charset=utf-8'
+  if (ext === '.svg') return 'image/svg+xml'
+  if (ext === '.png') return 'image/png'
+  return 'application/octet-stream'
+}
+
+/**
+ * Mount the component gallery at /__fusion/component when assets exist on disk.
+ * Returns whether routes were registered.
+ */
+function mountComponentGallery(engine, settingsInstance) {
+  const root = resolveFusionUiAssets()
+  if (!root) return false
+
+  const s = settingsInstance || settings
+  let mountPath = DEFAULT_COMPONENT_PATH
+  const raw = s.get('ui.component_path', null)
+  if (raw != null && String(raw).trim() !== '') {
+    mountPath = normalizeMonitorPath(raw)
+  }
+
+  const gallery = path.join(root, 'components.html')
+  if (!fs.existsSync(gallery)) return false
+
+  const htmlHandler = () => ({
+    status: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+    body: fs.readFileSync(gallery),
+  })
+  engine.route('GET', mountPath, htmlHandler)
+  if (mountPath !== '/') {
+    engine.route('GET', `${mountPath}/`, htmlHandler)
+  }
+
+  const skip = new Set([
+    'components.html',
+    'index.html',
+    'monitor.html',
+    'cache_monitor.html',
+  ])
+
+  function walk(dir, base) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full, base)
+        continue
+      }
+      const rel = path.relative(base, full).split(path.sep).join('/')
+      if (skip.has(rel)) continue
+      const url = `${mountPath}/${rel}`
+      engine.route('GET', url, () => ({
+        status: 200,
+        headers: { 'content-type': fusionUiContentType(full) },
+        body: fs.readFileSync(full),
+      }))
+    }
+  }
+  walk(root, root)
+  return true
+}
+
 function mountSwaggerAssets(engine, prefix) {
   const assetsPrefix = `${prefix}/assets`
   for (const [name, { contentType, body }] of Object.entries(SWAGGER_ASSETS)) {
@@ -1547,6 +1631,7 @@ class FusionApp {
     }
 
     mountMonitor(this.engine, settings)
+    mountComponentGallery(this.engine, settings)
 
     this.mounted = true
   }
@@ -1993,6 +2078,7 @@ module.exports = {
   tasks,
   mountMonitor,
   mountCacheMonitor,
+  mountComponentGallery,
   renderTemplate,
   clearRouteRegistry,
   openapiSpec,

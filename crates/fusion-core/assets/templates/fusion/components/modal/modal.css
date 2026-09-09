@@ -1,0 +1,226 @@
+/* Modal — centered dialog; size + animation are user-tunable via data attrs / CSS vars. */
+
+.fusion-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-5);
+  pointer-events: none;
+}
+
+.fusion-modal[hidden] {
+  display: none;
+}
+
+.fusion-modal.fusion-modal--open {
+  pointer-events: auto;
+}
+
+.fusion-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: color-mix(in oklch, var(--foreground) 45%, transparent);
+  opacity: 0;
+  transition: opacity var(--fusion-modal-duration, 220ms) var(--fusion-modal-easing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+.fusion-modal--open .fusion-modal__backdrop {
+  opacity: 1;
+}
+
+.fusion-modal__dialog {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  width: min(var(--fusion-modal-width, 28rem), 100%);
+  max-height: min(90vh, 40rem);
+  padding: var(--spacing-5);
+  overflow: auto;
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  outline: none;
+  opacity: 0;
+  transform: translateY(0.75rem) scale(0.96);
+  transition:
+    opacity var(--fusion-modal-duration, 220ms) var(--fusion-modal-easing, cubic-bezier(0.4, 0, 0.2, 1)),
+    transform var(--fusion-modal-duration, 220ms) var(--fusion-modal-easing, cubic-bezier(0.4, 0, 0.2, 1));
+}
+
+/* Size presets (override with --fusion-modal-width or data-size custom length). */
+.fusion-modal[data-size="sm"] .fusion-modal__dialog {
+  --fusion-modal-width: 20rem;
+}
+
+.fusion-modal[data-size="md"] .fusion-modal__dialog {
+  --fusion-modal-width: 28rem;
+}
+
+.fusion-modal[data-size="lg"] .fusion-modal__dialog {
+  --fusion-modal-width: 36rem;
+}
+
+.fusion-modal[data-size="xl"] .fusion-modal__dialog {
+  --fusion-modal-width: 44rem;
+}
+
+.fusion-modal--open .fusion-modal__dialog {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* Animation modes */
+.fusion-modal[data-animation="fade"] .fusion-modal__dialog {
+  transform: none;
+}
+
+.fusion-modal[data-animation="slide"] .fusion-modal__dialog {
+  transform: translateY(1.25rem);
+}
+
+.fusion-modal[data-animation="slide"].fusion-modal--open .fusion-modal__dialog {
+  transform: translateY(0);
+}
+
+.fusion-modal[data-animation="scale"] .fusion-modal__dialog {
+  transform: scale(0.92);
+}
+
+.fusion-modal[data-animation="scale"].fusion-modal--open .fusion-modal__dialog {
+  transform: scale(1);
+}
+
+.fusion-modal[data-animation="none"] .fusion-modal__backdrop,
+.fusion-modal[data-animation="none"] .fusion-modal__dialog {
+  transition: none;
+  transform: none;
+  opacity: 1;
+}
+
+.fusion-modal[data-animation="none"]:not(.fusion-modal--open) .fusion-modal__backdrop,
+.fusion-modal[data-animation="none"]:not(.fusion-modal--open) .fusion-modal__dialog {
+  opacity: 0;
+}
+
+.fusion-modal__close {
+  position: absolute;
+  top: var(--spacing-3);
+  right: var(--spacing-3);
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.fusion-modal__close:hover {
+  color: var(--foreground);
+  background-color: var(--accent);
+}
+
+.fusion-modal__close:focus-visible {
+  box-shadow: 0 0 0 var(--ring-width) color-mix(in oklch, var(--ring) 25%, transparent);
+}
+
+.fusion-modal__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+  padding-right: var(--spacing-8);
+}
+
+.fusion-modal__icon {
+  display: none;
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.1rem;
+}
+
+.fusion-modal__dialog--success .fusion-modal__icon,
+.fusion-modal__dialog--warning .fusion-modal__icon,
+.fusion-modal__dialog--error .fusion-modal__icon {
+  display: block;
+}
+
+.fusion-modal__dialog--success .fusion-modal__icon {
+  color: oklch(0.55 0.15 145);
+}
+
+.dark .fusion-modal__dialog--success .fusion-modal__icon {
+  color: oklch(0.75 0.15 145);
+}
+
+.fusion-modal__dialog--warning .fusion-modal__icon {
+  color: oklch(0.6 0.15 75);
+}
+
+.dark .fusion-modal__dialog--warning .fusion-modal__icon {
+  color: oklch(0.8 0.14 85);
+}
+
+.fusion-modal__dialog--error .fusion-modal__icon {
+  color: var(--destructive);
+}
+
+.fusion-modal__dialog--success {
+  border-color: color-mix(in oklch, oklch(0.65 0.15 145) 40%, var(--border));
+}
+
+.fusion-modal__dialog--warning {
+  border-color: color-mix(in oklch, oklch(0.75 0.15 75) 40%, var(--border));
+}
+
+.fusion-modal__dialog--error {
+  border-color: color-mix(in oklch, var(--destructive) 40%, var(--border));
+}
+
+.fusion-modal__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--leading-tight);
+  color: var(--popover-foreground);
+}
+
+.fusion-modal__body {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  color: var(--muted-foreground);
+}
+
+.fusion-modal__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-1);
+}
+
+body.fusion-modal-lock {
+  overflow: hidden;
+}
