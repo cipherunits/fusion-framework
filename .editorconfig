@@ -1,0 +1,41 @@
+# EditorConfig — https://editorconfig.org
+# Keep editors aligned across Rust, Python, Node, C#, and repo docs.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{js,mjs,cjs,ts,tsx,jsx,json,yml,yaml}]
+indent_size = 2
+
+[*.{cs,csproj,props,targets}]
+indent_size = 4
+
+[*.{rs,toml}]
+indent_size = 4
+
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+[*.md]
+trim_trailing_whitespace = false
+indent_size = 2
+
+[*.html]
+indent_size = 2
+
+[*.{css,scss}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[*.sh]
+indent_size = 2
