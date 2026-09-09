@@ -7,7 +7,7 @@
     <RootNamespace>FusionFramework</RootNamespace>
     <AssemblyName>FusionFramework</AssemblyName>
     <PackageId>Fusion-Framework</PackageId>
-    <Version>2.0.0</Version>
+    <Version>2.0.1</Version>
     <Authors>CipherUnits</Authors>
     <Company>CipherUnits</Company>
     <Description>Fusion Framework managed bindings (C#) over fusion-ffi / fusion-core</Description>
@@ -28,6 +28,14 @@
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="/" />
     <Content Include="runtimes/**" Pack="true" PackagePath="runtimes" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="static/swagger-ui/**" Pack="true" PackagePath="static/swagger-ui/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Disk copy for ProjectReference / local builds; also pack beside the DLL for NuGet. -->
+    <Content Include="static/swagger-ui/**"
+             Pack="true"
+             PackagePath="lib/$(TargetFramework)/static/swagger-ui/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+    <!-- Embedded so NuGet consumers still serve Swagger UI without copy-to-output. -->
+    <EmbeddedResource Include="static/swagger-ui/swagger-ui-bundle.js" />
+    <EmbeddedResource Include="static/swagger-ui/swagger-ui-standalone-preset.js" />
+    <EmbeddedResource Include="static/swagger-ui/swagger-ui.css" />
   </ItemGroup>
 </Project>

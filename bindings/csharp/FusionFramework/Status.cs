@@ -85,9 +85,10 @@ public class HttpException : Exception
             ["body"] = body is string or JsonNode
                 ? body
                 : JsonSerializer.SerializeToNode(body),
+            // Same string-typed map as FusionBaseApi.Response so header merges keep values.
             ["headers"] = Headers.Count == 0
                 ? null
-                : Headers.ToDictionary(kv => kv.Key, kv => (object)kv.Value),
+                : new Dictionary<string, string>(Headers, StringComparer.OrdinalIgnoreCase),
         };
     }
 }

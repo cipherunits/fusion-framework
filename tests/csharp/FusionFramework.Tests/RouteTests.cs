@@ -52,6 +52,22 @@ public class RouteTests
         Assert.True(v1["paths"]!.AsObject().ContainsKey("/v1/api/product"));
     }
 
+    [Fact]
+    public void Swagger_ui_assets_load_from_embedded_resources()
+    {
+        var css = SwaggerDocs.TryLoadSwaggerAsset("swagger-ui.css");
+        var bundle = SwaggerDocs.TryLoadSwaggerAsset("swagger-ui-bundle.js");
+        Assert.False(string.IsNullOrEmpty(css));
+        Assert.False(string.IsNullOrEmpty(bundle));
+        Assert.Contains("SwaggerUIBundle", bundle, StringComparison.Ordinal);
+
+        // Prefer the embedded stream (NuGet path), not only CopyToOutputDirectory files.
+        var asm = typeof(SwaggerDocs).Assembly;
+        Assert.Contains(
+            asm.GetManifestResourceNames(),
+            n => n.EndsWith(".swagger-ui.css", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Route("/api/[module]")]
     sealed class ProductModule : FusionBaseApi
     {

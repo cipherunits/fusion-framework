@@ -166,3 +166,14 @@ describe('middleware', () => {
     assert.equal(headers['content-type'], 'image/png')
   })
 })
+
+describe('reload child argv', () => {
+  it('forwards execArgv so tsx loaders survive spawn', () => {
+    const { reloadChildArgv } = fusion
+    const argv = reloadChildArgv(
+      ['--import', 'file:///tsx/loader.mjs'],
+      ['/usr/bin/node', 'main.ts'],
+    )
+    assert.deepEqual(argv, ['--import', 'file:///tsx/loader.mjs', 'main.ts'])
+  })
+})
