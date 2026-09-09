@@ -135,7 +135,7 @@ header.fingerprint = () =>
     : {
         'X-Powered-By': 'Fusion Framework',
         'X-Framework': 'Fusion',
-        ['X-Fusion-Version']: '2.0.0',
+        ['X-Fusion-Version']: '2.0.1',
       }
 
 function isThenable(value) {
@@ -1667,6 +1667,15 @@ function snapshotMtimes(files) {
   return map
 }
 
+/**
+ * Argv for the reload child process.
+ * Forwards `execArgv` so loaders like tsx (`--import` / `--require`) survive
+ * `spawn(process.execPath, …)` — unlike `fork()`, spawn does not inherit them.
+ */
+function reloadChildArgv(execArgv = process.execArgv, argv = process.argv) {
+  return [...execArgv, ...argv.slice(1)]
+}
+
 async function runWithReloader({ watchDirs } = {}) {
   const roots = watchDirs?.length ? watchDirs : [process.cwd()]
   console.log(`fusion: reload enabled (watching ${roots.join(', ')})`)
@@ -1674,7 +1683,7 @@ async function runWithReloader({ watchDirs } = {}) {
   let child = null
   const spawnChild = () => {
     const env = { ...process.env, FUSION_RELOAD_CHILD: '1' }
-    child = spawn(process.execPath, process.argv.slice(1), {
+    child = spawn(process.execPath, reloadChildArgv(), {
       env,
       stdio: 'inherit',
     })
@@ -1989,6 +1998,7 @@ module.exports = {
   openapiSpec,
   routeVersions,
   hasUnversionedRoutes,
+  reloadChildArgv,
   getHttpMethods: () => HTTP_METHODS,
   apiResourceNameJs: native.apiResourceNameJs,
   resolveRoutePathJs: native.resolveRoutePathJs,
