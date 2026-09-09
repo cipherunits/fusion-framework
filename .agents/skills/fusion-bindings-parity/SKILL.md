@@ -52,6 +52,7 @@ New public surface → show usage in **Python + Node + C#**. Prefer the same bas
 | OpenAPI / Swagger | `app.py` + `api_types.rs` | `buildOpenApi` in `index.js` | `Swagger.cs` |
 | Version navbar | per-version OpenAPI routes | same | same |
 | Template routes | omit from OpenAPI | omit | omit |
+| Template forms | `form` / `ok` / `fail` + `data-fusion-form` | same | `Form` / `Ok` / `Fail` |
 
 ## Verification commands
 

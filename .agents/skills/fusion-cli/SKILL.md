@@ -118,6 +118,7 @@ C# (`asp-core`): `main.cs`, `*.csproj` (`net10.0`), `[Route]` / `[HttpGet]`.
 ### What the starter demonstrates
 
 - `FusionBaseTemplate` at `/` (Tera templates; **not** listed in Swagger).
+- HTML forms: `form` / `ok` / `fail` + optional `data-fusion-form` (see skill `fusion-template-forms`).
 - Welcome UI via built-in components: `fusion.badge`, `fusion.button`, `fusion.card`, `fusion.table` (optional `page_size={10}` for client-side row pagination; styles: `{% include "fusion/components.css" %}`).
 - `FusionBaseApi` at `api/[module]` with `version="v1"` → `/v1/api/product/…`.
 - Convention verbs (`get` / `post` / …) plus one custom slot (`http_get` / `httpGet` / `[HttpGet]` with `[action]`).
@@ -150,6 +151,8 @@ C# (`asp-core`): `main.cs`, `*.csproj` (`net10.0`), `[Route]` / `[HttpGet]`.
   }
 }
 ```
+
+For TypeScript apps, `commands.run` must invoke a TypeScript runner (e.g. `npx tsx main.ts`); plain `node main.ts` fails with `ERR_UNKNOWN_FILE_EXTENSION`. With `reload: true`, the framework reloader forwards `process.execArgv` so tsx loaders survive child respawns. Older CLI scaffolds that still emit `node main.ts` should be updated in **fusion-tool** (`environment.rs` / `structure.rs`).
 
 `FUSION_ENV` selects `fusion.<env>.json` (default `dev`). Unresolved `HOST` placeholders must not crash listen — framework resolves safe defaults.
 

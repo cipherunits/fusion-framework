@@ -56,8 +56,11 @@ public abstract class FusionBaseApi
                 _ => JsonSerializer.SerializeToNode(body),
             },
         };
+        // Keep Dictionary<string, string> so middleware MergeResponseHeaders can
+        // preserve content-type (e.g. text/html from templates). Boxing as object
+        // made the typed merge check fail and dropped headers before the browser.
         if (headers is { Count: > 0 })
-            envelope["headers"] = headers.ToDictionary(kv => kv.Key, kv => (object)kv.Value);
+            envelope["headers"] = new Dictionary<string, string>(headers, StringComparer.OrdinalIgnoreCase);
         return envelope;
     }
 

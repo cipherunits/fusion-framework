@@ -106,4 +106,51 @@ public class MiddlewareTests
             dir.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public void SecurityHeaders_preserves_html_content_type_from_response()
+    {
+        // Template HtmlResponse uses Response(..., headers) then SecurityHeaders merges;
+        // content-type must survive so the browser renders HTML instead of raw source.
+        var api = new HeaderProbeApi();
+        var envelope = api.Response(
+            "<html><body>ok</body></html>",
+            200,
+            new Dictionary<string, string> { ["content-type"] = "text/html; charset=utf-8" });
+
+        var result = Middleware.RunChain(
+            new FusionRequest { Method = "GET", Path = "/", Headers = new Dictionary<string, string>() },
+            new[] { Middleware.SecurityHeaders() },
+            _ => envelope) as Dictionary<string, object?>;
+
+        Assert.NotNull(result);
+        var headers = Assert.IsType<Dictionary<string, string>>(result["headers"]);
+        Assert.StartsWith("text/html", headers["content-type"], StringComparison.OrdinalIgnoreCase);
+        Assert.True(headers.ContainsKey("X-Content-Type-Options"));
+    }
+
+    [Fact]
+    public void MergeResponseHeaders_keeps_object_boxed_content_type()
+    {
+        // Defensive path: older envelopes boxed header values as object.
+        var result = Middleware.MergeResponseHeaders(
+            new Dictionary<string, object?>
+            {
+                ["status"] = 200,
+                ["body"] = "<html/>",
+                ["headers"] = new Dictionary<string, object>
+                {
+                    ["content-type"] = "text/html; charset=utf-8",
+                },
+            },
+            new Dictionary<string, string> { ["X-Content-Type-Options"] = "nosniff" })
+            as Dictionary<string, object?>;
+
+        Assert.NotNull(result);
+        var headers = Assert.IsType<Dictionary<string, string>>(result["headers"]);
+        Assert.Equal("text/html; charset=utf-8", headers["content-type"]);
+        Assert.Equal("nosniff", headers["X-Content-Type-Options"]);
+    }
+
+    sealed class HeaderProbeApi : FusionBaseApi;
 }

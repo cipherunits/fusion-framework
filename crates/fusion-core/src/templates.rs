@@ -12,6 +12,7 @@ const BUILTIN_BASE: &str = include_str!("../assets/templates/fusion/base.html");
 const BUILTIN_COMPONENTS_CSS: &str =
     include_str!("../assets/templates/fusion/components.css");
 const BUILTIN_MONITOR: &str = include_str!("../assets/templates/fusion/monitor.html");
+const BUILTIN_FORM_JS: &str = include_str!("../assets/templates/fusion/form.js");
 
 static ENGINE_CACHE: Mutex<Option<EngineCache>> = Mutex::new(None);
 
@@ -73,6 +74,10 @@ fn build_engine(root: &Path) -> Result<Tera, String> {
         (
             "fusion/cache_monitor.html".to_string(),
             BUILTIN_MONITOR.to_string(),
+        ),
+        (
+            "fusion/form.js".to_string(),
+            BUILTIN_FORM_JS.to_string(),
         ),
     ];
 
