@@ -49,7 +49,8 @@ When you add behavior:
 
 - Stage **individual files only**. Never `git add .` / `git add -A`.
 - Only commit when the user asks.
-
+- **Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(optional-scope): <summary>`. Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`, `release`. Optional hook (no npm): `git config core.hooksPath .githooks` → `.githooks/commit-msg`.
+- Editor defaults: `.editorconfig` (LF, UTF-8, language-specific indent).
 ## Docs & skills hygiene
 
 After introducing something agents or developers must know later:

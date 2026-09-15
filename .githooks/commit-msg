@@ -1,0 +1,57 @@
+#!/usr/bin/env sh
+# Validate Conventional Commits without Node/npm.
+# Enable once per clone:  git config core.hooksPath .githooks
+#
+# Format: <type>(optional-scope)!: <summary>
+# Types: feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release
+
+msg_file="$1"
+if [ -z "$msg_file" ] || [ ! -f "$msg_file" ]; then
+  echo "commit-msg: missing commit message file" >&2
+  exit 1
+fi
+
+# First non-comment, non-empty line is the subject.
+subject=$(
+  grep -v '^#' "$msg_file" | sed '/^[[:space:]]*$/d' | head -n 1
+)
+
+if [ -z "$subject" ]; then
+  echo "commit-msg: empty commit subject" >&2
+  exit 1
+fi
+
+# Allow merge / revert subjects produced by git itself.
+case "$subject" in
+  Merge\ *|Revert\ *)
+    exit 0
+    ;;
+esac
+
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|release)(\([a-z0-9._/-]+\))?(!)?: .+'
+
+if ! printf '%s\n' "$subject" | grep -Eq "$pattern"; then
+  cat >&2 <<'EOF'
+commit-msg: subject must follow Conventional Commits
+
+  <type>(optional-scope): <summary>
+
+Examples:
+  feat(cache): add get_or_set helper
+  fix(node): restore swagger navbar versions
+  docs: expand root README install section
+  chore(release): bump to 2.0.2
+
+Types: feat fix docs style refactor perf test build ci chore revert release
+EOF
+  exit 1
+fi
+
+# Soft limit: keep the subject scannable in git log.
+len=$(printf '%s' "$subject" | wc -c | tr -d ' ')
+if [ "$len" -gt 100 ]; then
+  echo "commit-msg: subject is ${len} chars (max 100)" >&2
+  exit 1
+fi
+
+exit 0
