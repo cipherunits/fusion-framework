@@ -238,17 +238,25 @@ function cors(options = {}) {
   const allowCredentials = !!options.allowCredentials
   const maxAge = Number(options.maxAge ?? 600)
   const allowAll = origins.includes('*')
+  const allowAnyHeader = allowHeaders.length === 0 || allowHeaders.includes('*')
 
-  function corsHeaders(origin) {
+  function corsHeaders(request) {
+    const origin = getHeader(request, 'Origin')
     let chosen = '*'
     if (!allowAll) {
       if (origin && origins.includes(origin)) chosen = origin
       else if (origins.length) chosen = origins[0]
     }
+    const requested = getHeader(request, 'Access-Control-Request-Headers')
+    const allowHeadersValue = allowAnyHeader
+      ? requested && String(requested).trim()
+        ? String(requested)
+        : '*'
+      : allowHeaders.join(', ')
     const out = {
       'Access-Control-Allow-Origin': chosen,
       'Access-Control-Allow-Methods': methods.join(', '),
-      'Access-Control-Allow-Headers': allowHeaders.join(', '),
+      'Access-Control-Allow-Headers': allowHeadersValue,
       'Access-Control-Expose-Headers': exposeHeaders.join(', '),
       'Access-Control-Max-Age': String(maxAge),
       Vary: 'Origin',
@@ -257,14 +265,43 @@ function cors(options = {}) {
     return out
   }
 
-  return async (request, callNext) => {
-    const origin = getHeader(request, 'Origin')
-    const extra = corsHeaders(origin)
+  const middleware = async (request, callNext) => {
+    const extra = corsHeaders(request)
     if (String(request.method || 'GET').toUpperCase() === 'OPTIONS') {
       return { status: 204, body: '', headers: extra }
     }
     const result = await awaitMaybe(callNext(request))
     return mergeResponseHeaders(result, extra)
+  }
+  middleware.__fusionCors = true
+  return middleware
+}
+
+/** Paths that need an auto-registered OPTIONS handler for CORS preflight. */
+function pathsNeedingCorsPreflight(mountedRoutes) {
+  const paths = new Set()
+  const optionsPaths = new Set()
+  for (const { method, path } of mountedRoutes) {
+    paths.add(path)
+    if (String(method).toUpperCase() === 'OPTIONS') optionsPaths.add(path)
+  }
+  return [...paths].filter((p) => !optionsPaths.has(p))
+}
+
+/** Register OPTIONS on each API path so Cors middleware can answer before router 404. */
+function mountCorsPreflight(engine, middlewares, mountedRoutes) {
+  const chain = [...(middlewares || [])]
+  for (const path of pathsNeedingCorsPreflight(mountedRoutes || [])) {
+    engine.route('OPTIONS', path, (errOrRequest, maybeRequest) => {
+      const request = nativeRequestArg(errOrRequest, maybeRequest)
+      request.method = 'OPTIONS'
+      request.path = request.path || path
+      return runMiddlewareChain(request, chain, async () => ({
+        status: 204,
+        body: '',
+        headers: {},
+      }))
+    })
   }
 }
 
@@ -1308,7 +1345,25 @@ function applySwaggerOpenApi(openapi, swagger) {
   return openapi
 }
 
-const OPENAPI_PERMISSIONS_SCHEME = 'FusionPermissions'
+function resolveBearerSchemeName(schemes) {
+  const entries = Object.entries(asObject(schemes))
+  for (const [name, scheme] of entries) {
+    if (scheme?.type === 'http' && String(scheme?.scheme || '').toLowerCase() === 'bearer') return name
+  }
+  return 'BearerAuth'
+}
+
+function ensureBearerScheme(openapi, schemeName) {
+  openapi.components = asObject(openapi.components)
+  openapi.components.securitySchemes = asObject(openapi.components.securitySchemes)
+  if (openapi.components.securitySchemes[schemeName]) return
+  openapi.components.securitySchemes[schemeName] = {
+    type: 'http',
+    scheme: 'bearer',
+    bearerFormat: 'JWT',
+    description: 'JWT access token — Authorization: Bearer <token>',
+  }
+}
 
 function isTemplateClass(ApiClass) {
   let current = ApiClass
@@ -1327,6 +1382,7 @@ function fillOpenApiPaths(openapi, versionFilter = null) {
       .map((seg) => seg.slice(1, -1))
   }
 
+  const bearerScheme = resolveBearerSchemeName(openapi.components?.securitySchemes)
   let anyPermissions = false
 
   for (const item of registry) {
@@ -1363,23 +1419,12 @@ function fillOpenApiPaths(openapi, versionFilter = null) {
           200: { description: 'OK' },
           ...(requiresPermissions ? { 403: { description: 'Forbidden — permission check failed' } } : {}),
         },
-        ...(requiresPermissions ? { security: [{ [OPENAPI_PERMISSIONS_SCHEME]: [] }] } : {}),
+        ...(requiresPermissions ? { security: [{ [bearerScheme]: [] }] } : {}),
       }
     }
   }
 
-  if (anyPermissions) {
-    openapi.components = asObject(openapi.components)
-    openapi.components.securitySchemes = {
-      ...asObject(openapi.components.securitySchemes),
-      [OPENAPI_PERMISSIONS_SCHEME]: {
-        type: 'apiKey',
-        in: 'header',
-        name: 'Authorization',
-        description: 'Route requires custom permission checks to pass',
-      },
-    }
-  }
+  if (anyPermissions) ensureBearerScheme(openapi, bearerScheme)
   return openapi
 }
 
@@ -1496,9 +1541,14 @@ class FusionApp {
     if (this.mounted) return
     activeGlobalMiddleware = [...this._middleware]
 
+    const mountedRoutes = []
     for (const { ApiClass, middleware: routeMiddleware = [], slots = [] } of registry) {
       for (const slot of slots) {
         const handlerMethod = slot.handlerMethod
+        mountedRoutes.push({
+          method: String(slot.httpMethod).toUpperCase(),
+          path: slot.path,
+        })
         this.engine.route(String(slot.httpMethod).toUpperCase(), slot.path, (errOrRequest, maybeRequest) => {
           const request = nativeRequestArg(errOrRequest, maybeRequest)
           const chain = [...activeGlobalMiddleware, ...routeMiddleware]
@@ -1517,6 +1567,7 @@ class FusionApp {
       }
     }
 
+    mountCorsPreflight(this.engine, this._middleware, mountedRoutes)
     mountStaticFiles(this.engine, this._middleware)
 
     const swagger = readSwaggerSettings()
@@ -1982,6 +2033,8 @@ module.exports = {
   frameworkHeaders,
   securityHeaders,
   cors,
+  pathsNeedingCorsPreflight: pathsNeedingCorsPreflight,
+  mountCorsPreflight,
   cacheHeaders,
   requestId,
   staticFiles,

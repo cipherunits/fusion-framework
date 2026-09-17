@@ -33,6 +33,8 @@ public sealed class FusionApp : IDisposable
     {
         Middleware.SetActiveGlobal(_middleware);
 
+        var mounted = new List<(string Method, string Path)>();
+
         foreach (var entry in Route.Snapshot())
         {
             foreach (var mountSlot in entry.Slots)
@@ -110,12 +112,63 @@ public sealed class FusionApp : IDisposable
 
                 if (Native.fusion_app_route(_app, slot.Method, slot.Path, cb, GCHandle.ToIntPtr(gch)) != 0)
                     throw new InvalidOperationException($"Failed to register {slot.Method} {slot.Path}");
+
+                mounted.Add((slot.Method, slot.Path));
             }
         }
+
+        MountCorsPreflightRoutes(mounted);
 
         Middleware.MountStaticFiles(this, _middleware);
         SwaggerDocs.Mount(this, SettingsStore.Current);
         FusionMonitor.Mount(this, SettingsStore.Current);
+    }
+
+    void MountCorsPreflightRoutes(List<(string Method, string Path)> mounted)
+    {
+        var chain = _middleware.ToList();
+        foreach (var path in Middleware.PathsNeedingCorsPreflight(mounted))
+        {
+            var capturedPath = path;
+            Native.FusionHandlerFn cb = (_, method, reqPath, headersJson, body, paramsJson, queryJson, stateJson) =>
+            {
+                try
+                {
+                    var req = new FusionRequest
+                    {
+                        Method = Native.PtrToUtf8(method) ?? "OPTIONS",
+                        Path = Native.PtrToUtf8(reqPath) ?? capturedPath,
+                        Body = Native.PtrToUtf8(body) ?? "",
+                        Headers = JsonUtil.ParseStringMap(Native.PtrToUtf8(headersJson)),
+                        Params = JsonUtil.ParseStringMap(Native.PtrToUtf8(paramsJson)),
+                        Query = JsonUtil.ParseStringMap(Native.PtrToUtf8(queryJson)),
+                        State = JsonUtil.ParseState(Native.PtrToUtf8(stateJson)),
+                    };
+
+                    var result = Middleware.RunChain(req, chain, _ => new Dictionary<string, object?>
+                    {
+                        ["status"] = 204,
+                        ["body"] = "",
+                        ["headers"] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                    });
+                    result = Middleware.ResolveAwaitable(result);
+                    return Native.fusion_string_dup(JsonUtil.SerializeResponse(result));
+                }
+                catch (Exception ex)
+                {
+                    var err = JsonSerializer.Serialize(new
+                    {
+                        status = 500,
+                        body = new { detail = ex.Message },
+                    });
+                    return Native.fusion_string_dup(err);
+                }
+            };
+
+            _pins.Add(GCHandle.Alloc(cb));
+            if (Native.fusion_app_route(_app, "OPTIONS", capturedPath, cb, IntPtr.Zero) != 0)
+                throw new InvalidOperationException($"Failed to register OPTIONS {capturedPath}");
+        }
     }
 
     internal void AddRawRoute(string method, string path, Func<object?> handler)

@@ -403,8 +403,9 @@ class FusionApp:
         if not self._mounted:
             set_active_global(self._middleware)
             self._engine.mount_routes()
-            from fusion_framework.middleware import mount_static_files
+            from fusion_framework.middleware import mount_cors_preflight, mount_static_files
 
+            mount_cors_preflight(self._engine)
             mount_static_files(self._engine, self._middleware)
             swagger = _swagger_settings(self.settings)
             if swagger.get("enabled"):

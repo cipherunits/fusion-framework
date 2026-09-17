@@ -15,6 +15,8 @@ public static class Header
     public const string Location = "Location";
     public const string Authorization = "Authorization";
     public const string CacheControl = "Cache-Control";
+    public const string Cookie = "Cookie";
+    public const string SetCookie = "Set-Cookie";
     public const string ApplicationJson = "application/json";
     public const string ApplicationOctetStream = "application/octet-stream";
     public const string ApplicationPdf = "application/pdf";
@@ -26,6 +28,9 @@ public static class Header
     public static string CONTENT_DISPOSITION => Get("CONTENT_DISPOSITION", ContentDisposition);
     public static string LOCATION => Get("LOCATION", Location);
     public static string AUTHORIZATION => Get("AUTHORIZATION", Authorization);
+    public static string CACHE_CONTROL => Get("CACHE_CONTROL", CacheControl);
+    public static string COOKIE => Get("COOKIE", Cookie);
+    public static string SET_COOKIE => Get("SET_COOKIE", SetCookie);
     public static string APPLICATION_JSON => Get("APPLICATION_JSON", ApplicationJson);
     public static string APPLICATION_OCTET_STREAM => Get("APPLICATION_OCTET_STREAM", ApplicationOctetStream);
     public static string APPLICATION_PDF => Get("APPLICATION_PDF", ApplicationPdf);
@@ -47,6 +52,9 @@ public static class Header
             map["CONTENT_DISPOSITION"] = ContentDisposition;
             map["LOCATION"] = Location;
             map["AUTHORIZATION"] = Authorization;
+            map["CACHE_CONTROL"] = CacheControl;
+            map["COOKIE"] = Cookie;
+            map["SET_COOKIE"] = SetCookie;
             map["APPLICATION_JSON"] = ApplicationJson;
             map["APPLICATION_OCTET_STREAM"] = ApplicationOctetStream;
             map["APPLICATION_PDF"] = ApplicationPdf;

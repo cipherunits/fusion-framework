@@ -19,7 +19,9 @@ mod json;
 mod pagination;
 mod tasks;
 
-use api_types::{PyFusionBaseApi, clear_registry, mount_routes, register_route};
+use api_types::{
+    PyFusionBaseApi, clear_registry, list_registered_routes, mount_routes, register_route,
+};
 use cache::register_cache;
 use tasks::register_tasks;
 use json::{json_to_py, py_to_json};
@@ -466,6 +468,11 @@ fn clear_routes() {
     clear_registry();
 }
 
+#[pyfunction(name = "list_registered_routes")]
+fn py_list_registered_routes() -> Vec<(String, String)> {
+    list_registered_routes()
+}
+
 // Host-language HTTPException response building.
 #[pyfunction]
 fn http_error_to_response(
@@ -521,6 +528,7 @@ fn _fusion(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_prefers_json, m)?)?;
     m.add_function(wrap_pyfunction!(py_register_route, m)?)?;
     m.add_function(wrap_pyfunction!(clear_routes, m)?)?;
+    m.add_function(wrap_pyfunction!(py_list_registered_routes, m)?)?;
     m.add_function(wrap_pyfunction!(http_error_to_response, m)?)?;
     m.add_function(wrap_pyfunction!(py_openapi_spec, m)?)?;
     m.add_function(wrap_pyfunction!(py_route_versions, m)?)?;

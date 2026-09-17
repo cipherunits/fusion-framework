@@ -9,6 +9,7 @@ from fusion_framework.middleware import (
     cors,
     dispatch_route,
     framework_headers,
+    paths_needing_cors_preflight,
     request_id,
     require_roles,
     set_active_global,
@@ -72,16 +73,33 @@ def test_request_id_header():
 
 
 def test_cors_options_preflight():
-    set_active_global([cors()])
+    set_active_global([cors(allow_headers=["*"])])
     request = {
         "path": "/api",
-        "headers": {"Origin": "https://example.com"},
+        "headers": {
+            "Origin": "https://example.com",
+            "Access-Control-Request-Headers": "content-type,authorization",
+        },
         "method": "OPTIONS",
     }
     result = dispatch_route(request, _handler, [])
     assert result["status"] == 204
     headers = {str(k).lower(): v for k, v in (result.get("headers") or {}).items()}
     assert headers.get("access-control-allow-origin")
+    assert headers.get("access-control-allow-headers") == "content-type,authorization"
+
+
+def test_paths_needing_cors_preflight():
+    paths = paths_needing_cors_preflight(
+        [
+            ("GET", "/v1/api/cinema"),
+            ("POST", "/v1/api/cinema"),
+            ("OPTIONS", "/v1/api/other"),
+            ("GET", "/v1/api/other"),
+        ]
+    )
+    assert "/v1/api/cinema" in paths
+    assert "/v1/api/other" not in paths
 
 
 def test_framework_headers_awaits_async_handler():

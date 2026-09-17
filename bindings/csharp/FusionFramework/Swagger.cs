@@ -215,28 +215,51 @@ internal static class SwaggerDocs
         if (swagger.AuthGlobal.Count > 0)
             spec["security"] = swagger.AuthGlobal.DeepClone();
 
-        var anyPermissions = FillPaths((JsonObject)spec["paths"]!, version);
+        var schemes = (spec["components"] as JsonObject)?["securitySchemes"] as JsonObject;
+        var bearerScheme = ResolveBearerSchemeName(schemes);
+        var anyPermissions = FillPaths((JsonObject)spec["paths"]!, version, bearerScheme);
         if (anyPermissions)
-        {
-            if (spec["components"] is not JsonObject components)
-            {
-                components = new JsonObject();
-                spec["components"] = components;
-            }
-            if (components["securitySchemes"] is not JsonObject schemes)
-            {
-                schemes = new JsonObject();
-                components["securitySchemes"] = schemes;
-            }
-            schemes["FusionPermissions"] = new JsonObject
-            {
-                ["type"] = "apiKey",
-                ["in"] = "header",
-                ["name"] = "Authorization",
-                ["description"] = "Route requires custom permission checks to pass",
-            };
-        }
+            EnsureBearerScheme(spec, bearerScheme);
         return spec;
+    }
+
+    /// <summary>Prefer a configured HTTP bearer scheme; otherwise BearerAuth.</summary>
+    static string ResolveBearerSchemeName(JsonObject? schemes)
+    {
+        if (schemes is null) return "BearerAuth";
+        foreach (var kv in schemes)
+        {
+            if (kv.Value is not JsonObject scheme) continue;
+            var type = scheme["type"]?.GetValue<string>();
+            var httpScheme = scheme["scheme"]?.GetValue<string>();
+            if (string.Equals(type, "http", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(httpScheme, "bearer", StringComparison.OrdinalIgnoreCase))
+                return kv.Key;
+        }
+        if (schemes.ContainsKey("BearerAuth")) return "BearerAuth";
+        return "BearerAuth";
+    }
+
+    static void EnsureBearerScheme(JsonObject spec, string schemeName)
+    {
+        if (spec["components"] is not JsonObject components)
+        {
+            components = new JsonObject();
+            spec["components"] = components;
+        }
+        if (components["securitySchemes"] is not JsonObject schemes)
+        {
+            schemes = new JsonObject();
+            components["securitySchemes"] = schemes;
+        }
+        if (schemes.ContainsKey(schemeName)) return;
+        schemes[schemeName] = new JsonObject
+        {
+            ["type"] = "http",
+            ["scheme"] = "bearer",
+            ["bearerFormat"] = "JWT",
+            ["description"] = "JWT access token — Authorization: Bearer <token>",
+        };
     }
 
     /// <summary>Build a minimal OpenAPI document for unit tests without a live Swagger config.</summary>
@@ -257,9 +280,8 @@ internal static class SwaggerDocs
     }
 
     /// <summary>Fill OpenAPI path operations; returns true if any route requires permissions.</summary>
-    static bool FillPaths(JsonObject paths, string? versionFilter)
+    static bool FillPaths(JsonObject paths, string? versionFilter, string bearerScheme = "BearerAuth")
     {
-        const string permissionsScheme = "FusionPermissions";
         var anyPermissions = false;
 
         foreach (var entry in Route.Snapshot())
@@ -384,7 +406,7 @@ internal static class SwaggerDocs
                 {
                     operation["security"] = new JsonArray
                     {
-                        new JsonObject { [permissionsScheme] = new JsonArray() },
+                        new JsonObject { [bearerScheme] = new JsonArray() },
                     };
                     if (operation["responses"] is JsonObject responses)
                     {

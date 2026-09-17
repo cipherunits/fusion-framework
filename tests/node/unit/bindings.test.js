@@ -14,6 +14,7 @@ const {
   runMiddlewareChain,
   bearerJwt,
   cors,
+  pathsNeedingCorsPreflight,
   requireRoles,
   frameworkHeaders,
   staticFiles,
@@ -129,14 +130,33 @@ describe('middleware', () => {
     const request = {
       method: 'OPTIONS',
       path: '/api',
-      headers: { Origin: 'https://example.com' },
+      headers: {
+        Origin: 'https://example.com',
+        'Access-Control-Request-Headers': 'content-type,authorization',
+      },
     }
-    const result = await runMiddlewareChain(request, [cors()], handler)
+    const result = await runMiddlewareChain(
+      request,
+      [cors({ allowHeaders: ['*'] })],
+      handler,
+    )
     assert.equal(result.status, 204)
     const headers = Object.fromEntries(
       Object.entries(result.headers || {}).map(([k, v]) => [k.toLowerCase(), v])
     )
     assert.ok(headers['access-control-allow-origin'])
+    assert.equal(headers['access-control-allow-headers'], 'content-type,authorization')
+  })
+
+  it('pathsNeedingCorsPreflight skips existing OPTIONS', () => {
+    const paths = pathsNeedingCorsPreflight([
+      { method: 'GET', path: '/v1/api/cinema' },
+      { method: 'POST', path: '/v1/api/cinema' },
+      { method: 'OPTIONS', path: '/v1/api/other' },
+      { method: 'GET', path: '/v1/api/other' },
+    ])
+    assert.ok(paths.includes('/v1/api/cinema'))
+    assert.ok(!paths.includes('/v1/api/other'))
   })
 
   it('frameworkHeaders merges identity headers', async () => {

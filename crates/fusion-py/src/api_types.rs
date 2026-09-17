@@ -503,6 +503,19 @@ fn iter_class_callables(
     Ok(out)
 }
 
+pub fn list_registered_routes() -> Vec<(String, String)> {
+    let Ok(guard) = REGISTRY.lock() else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for route in guard.iter() {
+        for slot in &route.slots {
+            out.push((slot.http_method.to_ascii_uppercase(), slot.path.clone()));
+        }
+    }
+    out
+}
+
 pub fn mount_routes(app: &super::PyApp) -> PyResult<()> {
     let routes: Vec<(Vec<RouteMountSlot>, Py<PyType>, Vec<Py<PyAny>>)> = Python::with_gil(|py| {
         let guard = REGISTRY
@@ -900,7 +913,7 @@ pub fn openapi_spec() -> serde_json::Value {
 pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
     use serde_json::{Map, Value, json};
     const OPENAPI_VERSION: &str = "3.0.3";
-    const PERMISSIONS_SCHEME: &str = "FusionPermissions";
+    const BEARER_SCHEME: &str = "BearerAuth";
 
     let routes_guard = match REGISTRY.lock() {
         Ok(g) => g,
@@ -1039,7 +1052,7 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                 if let Some(obj) = op.as_object_mut() {
                     obj.insert(
                         "security".to_string(),
-                        json!([{ PERMISSIONS_SCHEME: [] }]),
+                        json!([{ BEARER_SCHEME: [] }]),
                     );
                     if let Some(resp) = obj.get_mut("responses").and_then(|v| v.as_object_mut()) {
                         resp.insert(
@@ -1086,11 +1099,11 @@ pub fn openapi_spec_for(version: Option<&str>) -> serde_json::Value {
                 "components".to_string(),
                 json!({
                     "securitySchemes": {
-                        PERMISSIONS_SCHEME: {
-                            "type": "apiKey",
-                            "in": "header",
-                            "name": "Authorization",
-                            "description": "Route requires custom permission checks to pass",
+                        BEARER_SCHEME: {
+                            "type": "http",
+                            "scheme": "bearer",
+                            "bearerFormat": "JWT",
+                            "description": "JWT access token — Authorization: Bearer <token>",
                         }
                     }
                 }),

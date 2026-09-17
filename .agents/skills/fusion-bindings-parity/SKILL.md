@@ -44,6 +44,7 @@ New public surface → show usage in **Python + Node + C#**. Prefer the same bas
 | Convention HTTP | `def get(self)` | `get()` method | `Get()` method |
 | Custom HTTP | `@http_get("path/[action]")` | `httpGet('path/[action]')(proto.method)` | `[HttpGet("path/[action]")]` |
 | Middleware | `middleware.py` factories | factories in `index.js` | `Middleware.cs` |
+| CORS preflight | `mount_cors_preflight` auto OPTIONS | `mountCorsPreflight` auto OPTIONS | `MountCorsPreflightRoutes` auto OPTIONS |
 | Static files | `static_files()` | `staticFiles()` | `Middleware.StaticFiles()` |
 | Cache | `fusion_framework.cache` (moka) | `cache` export | `Cache` |
 | Fusion monitor | `monitor.mount_monitor` | `mountMonitor` | `FusionMonitor` |

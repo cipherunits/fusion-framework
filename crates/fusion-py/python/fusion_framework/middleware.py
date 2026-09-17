@@ -369,18 +369,24 @@ def cors(
     )
     expose = ["X-Request-Id"] if expose_headers is None else [str(h) for h in expose_headers]
     allow_all = "*" in origins
+    allow_any_header = (not headers) or ("*" in headers)
 
-    def _cors_headers(origin: str | None) -> dict[str, str]:
+    def _cors_headers(request: RequestDict) -> dict[str, str]:
+        origin = _get_header(request, "Origin")
         chosen = "*"
         if not allow_all:
             if origin and origin in origins:
                 chosen = origin
             elif origins:
                 chosen = origins[0]
+        requested = _get_header(request, "Access-Control-Request-Headers")
+        allow_headers_value = (
+            requested if allow_any_header and requested else ("*" if allow_any_header else ", ".join(headers))
+        )
         out = {
             "Access-Control-Allow-Origin": chosen,
             "Access-Control-Allow-Methods": ", ".join(methods),
-            "Access-Control-Allow-Headers": ", ".join(headers),
+            "Access-Control-Allow-Headers": allow_headers_value,
             "Access-Control-Expose-Headers": ", ".join(expose),
             "Access-Control-Max-Age": str(max_age),
             "Vary": "Origin",
@@ -390,13 +396,53 @@ def cors(
         return out
 
     def middleware(request: RequestDict, call_next: Callable[[RequestDict], Any]) -> Any:
-        origin = _get_header(request, "Origin")
-        extra = _cors_headers(origin)
+        extra = _cors_headers(request)
         if str(request.get("method", "GET")).upper() == "OPTIONS":
             return {"status": 204, "body": "", "headers": extra}
         return _call_next_merge_headers(call_next, request, extra)
 
+    setattr(middleware, "__fusion_cors__", True)
     return middleware
+
+
+def paths_needing_cors_preflight(mounted_routes: Iterable[tuple[str, str]]) -> list[str]:
+    """Return API paths that need an auto-registered OPTIONS handler."""
+    paths: set[str] = set()
+    options_paths: set[str] = set()
+    for method, path in mounted_routes:
+        paths.add(path)
+        if str(method).upper() == "OPTIONS":
+            options_paths.add(path)
+    return [p for p in paths if p not in options_paths]
+
+
+def mount_cors_preflight(engine: Any, mounted_routes: Iterable[tuple[str, str]] | None = None) -> None:
+    """Register OPTIONS on each API path so Cors can answer before router 404."""
+    routes = list(mounted_routes) if mounted_routes is not None else []
+    if not routes:
+        try:
+            from fusion_framework._fusion import list_registered_routes as _list_routes
+
+            routes = [(m, p) for m, p in _list_routes()]
+        except Exception:
+            routes = []
+
+    def _make_handler(captured_path: str):
+        def _handler(request: RequestDict | None = None) -> Any:
+            req: RequestDict = dict(request or {})
+            req["method"] = "OPTIONS"
+            req.setdefault("path", captured_path)
+            req.setdefault("headers", {})
+            req.setdefault("params", {})
+            req.setdefault("query", {})
+            req.setdefault("body", "")
+            req.setdefault("state", {})
+            return dispatch_route(req, lambda _r: {"status": 204, "body": "", "headers": {}}, [])
+
+        return _handler
+
+    for path in paths_needing_cors_preflight(routes):
+        engine.route("OPTIONS", path, _make_handler(path))
 
 
 _STATIC_MIME_TYPES: dict[str, str] = {

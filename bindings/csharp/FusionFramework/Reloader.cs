@@ -14,6 +14,7 @@ public static class Reloader
     {
         ".git", ".hg", "node_modules", "target", ".venv", "venv",
         "__pycache__", "bin", "obj", "dist", "build", ".idea", ".vs",
+        ".sentry-native",
     };
 
     static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
@@ -143,17 +144,52 @@ public static class Reloader
                 continue;
             }
             if (!Directory.Exists(root)) continue;
-            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-            {
-                var rel = Path.GetRelativePath(root, file);
-                if (rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                        .Any(p => SkipDirs.Contains(p)))
-                    continue;
-                if (Extensions.Contains(Path.GetExtension(file)))
-                    files.Add(file);
-            }
+            CollectDir(root, files);
         }
         return files;
+    }
+
+    static void CollectDir(string dir, List<string> files)
+    {
+        IEnumerable<string> entries;
+        try
+        {
+            entries = Directory.EnumerateFileSystemEntries(dir);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return;
+        }
+        catch (IOException)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            try
+            {
+                var name = Path.GetFileName(entry);
+                if (Directory.Exists(entry))
+                {
+                    if (SkipDirs.Contains(name))
+                        continue;
+                    CollectDir(entry, files);
+                    continue;
+                }
+
+                if (Extensions.Contains(Path.GetExtension(entry)))
+                    files.Add(entry);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                /* skip unreadable entries */
+            }
+            catch (IOException)
+            {
+                /* skip unreadable entries */
+            }
+        }
     }
 
     static Dictionary<string, long> Snapshot(IEnumerable<string> files)

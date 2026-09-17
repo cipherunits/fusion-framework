@@ -280,9 +280,11 @@ public static class Middleware
         }).ToList();
         var expose = (exposeHeaders ?? new[] { "X-Request-Id" }).ToList();
         var allowAll = origins.Contains("*");
+        var allowAnyHeader = headers.Count == 0 || headers.Any(h => h == "*");
 
-        Dictionary<string, string> CorsHeaders(string? origin)
+        Dictionary<string, string> CorsHeaders(FusionRequest request)
         {
+            var origin = GetHeader(request, "Origin");
             var chosen = "*";
             if (!allowAll)
             {
@@ -292,11 +294,18 @@ public static class Middleware
                     chosen = origins[0];
             }
 
+            // Reflect requested headers on preflight when configured with "*".
+            var allowHeadersValue = allowAnyHeader
+                ? (GetHeader(request, "Access-Control-Request-Headers") is { Length: > 0 } requested
+                    ? requested
+                    : "*")
+                : string.Join(", ", headers);
+
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Access-Control-Allow-Origin"] = chosen,
                 ["Access-Control-Allow-Methods"] = string.Join(", ", methods),
-                ["Access-Control-Allow-Headers"] = string.Join(", ", headers),
+                ["Access-Control-Allow-Headers"] = allowHeadersValue,
                 ["Access-Control-Expose-Headers"] = string.Join(", ", expose),
                 ["Access-Control-Max-Age"] = maxAge.ToString(),
                 ["Vary"] = "Origin",
@@ -308,8 +317,7 @@ public static class Middleware
 
         return (request, callNext) =>
         {
-            var origin = GetHeader(request, "Origin");
-            var extra = CorsHeaders(origin);
+            var extra = CorsHeaders(request);
             if (string.Equals(request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
             {
                 return new Dictionary<string, object?>
@@ -323,6 +331,26 @@ public static class Middleware
             var result = ResolveAwaitable(callNext(request));
             return MergeResponseHeaders(result, extra);
         };
+    }
+
+    /// <summary>
+    /// Register <c>OPTIONS</c> for every mounted API path that lacks one so CORS
+    /// middleware can answer browser preflight before the router returns 404.
+    /// </summary>
+    public static IEnumerable<string> PathsNeedingCorsPreflight(
+        IEnumerable<(string Method, string Path)> mountedRoutes)
+    {
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        var optionsPaths = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var (method, path) in mountedRoutes)
+        {
+            paths.Add(path);
+            if (string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+                optionsPaths.Add(path);
+        }
+
+        return paths.Where(p => !optionsPaths.Contains(p)).ToList();
     }
 
     static readonly Dictionary<string, string> StaticMimeTypes = new(StringComparer.OrdinalIgnoreCase)

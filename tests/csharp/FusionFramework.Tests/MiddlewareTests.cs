@@ -62,16 +62,39 @@ public class MiddlewareTests
         {
             Method = "OPTIONS",
             Path = "/api",
-            Headers = new Dictionary<string, string> { ["Origin"] = "https://example.com" },
+            Headers = new Dictionary<string, string>
+            {
+                ["Origin"] = "https://example.com",
+                ["Access-Control-Request-Headers"] = "content-type,authorization",
+            },
         };
 
-        var result = Middleware.RunChain(request, new[] { Middleware.Cors() }, Handler)
+        var result = Middleware.RunChain(
+                request,
+                new[] { Middleware.Cors(allowHeaders: new[] { "*" }) },
+                Handler)
             as Dictionary<string, object?>;
 
         Assert.NotNull(result);
         Assert.Equal(204, result["status"]);
         var headers = Assert.IsType<Dictionary<string, string>>(result["headers"]);
         Assert.False(string.IsNullOrEmpty(headers["Access-Control-Allow-Origin"]));
+        Assert.Equal("content-type,authorization", headers["Access-Control-Allow-Headers"]);
+    }
+
+    [Fact]
+    public void PathsNeedingCorsPreflight_skips_existing_options()
+    {
+        var paths = Middleware.PathsNeedingCorsPreflight(new[]
+        {
+            ("GET", "/v1/api/cinema"),
+            ("POST", "/v1/api/cinema"),
+            ("OPTIONS", "/v1/api/other"),
+            ("GET", "/v1/api/other"),
+        }).ToList();
+
+        Assert.Contains("/v1/api/cinema", paths);
+        Assert.DoesNotContain("/v1/api/other", paths);
     }
 
     [Fact]
