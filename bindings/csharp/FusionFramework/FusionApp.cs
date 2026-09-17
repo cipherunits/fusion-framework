@@ -116,6 +116,7 @@ public sealed class FusionApp : IDisposable
         Middleware.MountStaticFiles(this, _middleware);
         SwaggerDocs.Mount(this, SettingsStore.Current);
         FusionMonitor.Mount(this, SettingsStore.Current);
+        FusionUi.Mount(this, SettingsStore.Current);
     }
 
     internal void AddRawRoute(string method, string path, Func<object?> handler)

@@ -1,0 +1,32 @@
+{# Fusion Toast — hot-toast style notifications with 6 screen positions.
+   Mount once (usually in the base layout), then call FusionToast.show from JS
+   or use data-fusion-toast on a fusion.button / any clickable.
+
+   Usage:
+     {{<fusion.toast position="top-center" />}}
+     <script src="…/components/toast/toast.js"></script>
+
+   Positions: top-left | top-center | top-right | bottom-left | bottom-center | bottom-right
+   Variants:  default | success | error | warning | info
+#}
+{% component fusion.toast(
+  position: string = "top-center",
+  duration: number = 3500,
+  class: string = ""
+) %}
+<div
+  class="fusion-toaster{% if class %} {{ class }}{% endif %}"
+  data-fusion-toaster
+  data-default-position="{{ position }}"
+  data-default-duration="{{ duration }}"
+  aria-live="polite"
+  aria-relevant="additions"
+>
+  <div class="fusion-toaster__region fusion-toaster__region--top-left" data-position="top-left"></div>
+  <div class="fusion-toaster__region fusion-toaster__region--top-center" data-position="top-center"></div>
+  <div class="fusion-toaster__region fusion-toaster__region--top-right" data-position="top-right"></div>
+  <div class="fusion-toaster__region fusion-toaster__region--bottom-left" data-position="bottom-left"></div>
+  <div class="fusion-toaster__region fusion-toaster__region--bottom-center" data-position="bottom-center"></div>
+  <div class="fusion-toaster__region fusion-toaster__region--bottom-right" data-position="bottom-right"></div>
+</div>
+{% endcomponent fusion.toast %}

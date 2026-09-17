@@ -144,3 +144,15 @@ def test_mount_monitor_respects_enabled_flag():
     )
     engine_on = App()
     assert mount_monitor(engine_on, settings_on) is True
+
+
+def test_mount_component_gallery_when_assets_exist():
+    from fusion_framework._fusion import App
+    from fusion_framework.ui import mount_component_gallery, resolve_fusion_ui_assets
+
+    root = resolve_fusion_ui_assets()
+    assert root is not None
+    assert (root / "components.html").is_file()
+
+    engine = App()
+    assert mount_component_gallery(engine) is True

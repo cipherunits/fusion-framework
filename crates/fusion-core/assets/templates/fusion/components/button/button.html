@@ -1,0 +1,27 @@
+{# Fusion Button — primary / secondary / danger / link modes.
+   Usage:
+     {{<fusion.button label="Save" variant="primary" />}}
+     {{<fusion.button label="Docs" href="/docs" variant="link" />}}
+#}
+{% component fusion.button(
+  label: string,
+  href: string = "",
+  variant: string = "primary",
+  type: string = "button",
+  disabled: bool = false,
+  class: string = ""
+) %}
+{%- if href -%}
+<a
+  href="{{ href }}"
+  class="fusion-btn fusion-btn--{{ variant }}{% if class %} {{ class }}{% endif %}"
+  {% if disabled %}aria-disabled="true" tabindex="-1"{% endif %}
+>{{ label }}</a>
+{%- else -%}
+<button
+  type="{{ type }}"
+  class="fusion-btn fusion-btn--{{ variant }}{% if class %} {{ class }}{% endif %}"
+  {% if disabled %}disabled{% endif %}
+>{{ label }}</button>
+{%- endif -%}
+{% endcomponent fusion.button %}
